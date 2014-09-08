@@ -1,0 +1,505 @@
+#!/usr/bin/env perl
+=head1 NAME
+
+I<melm> - Sequence masking of assigned ELM motifs
+
+=head1 USAGE
+
+ melm [h,v,u,c,i,a,E,X,m,n,C,P,l,t] <SEQ FILES...>
+    -h, --help
+        this message
+    -v, --verbose
+        receive information about what melm is doing
+    -u, --update 
+        download and start using the latest class definitions from ELM.eu.org
+    -c, --list-classes
+        get TSV output for the current ELM classes library melm is using 
+    -i, --list-instances
+        get TSV output of all the ELM instances held in the melm cache
+    -a, --assign
+        do not mask sequences, instead output a TSV format of all the ELM assignments made per sequence
+    -G, -GFF3
+        produce GFF3 output when using --assign, useful if you wish to add this assignment to a genome browser or similar
+    -E <>, --max-class-expect=<>
+        filter out ELM classes based on their annotated expectation, bigger E means allow for more common motifs
+    -X, --hard-mask
+        when masking use replacement 'x' characters instead of just making lower case (soft masking)
+    -m, --mask-motifs
+        instead of masking sequence free of motifs mask the motif rich regions
+    -n <>, --num-elms=<>
+        threshold number of elms per residue assigned to mask on
+    -C <>, --min-elm-complexity=<>
+        set a minimum limit of complexity rate to assign an ELM, larger number means more complex motifs included
+    -P <>, --max-elm-probability=<>
+        set the maximum ELM probability, if a short motif is found with high probability its perhaps too common to be a true positive
+    -l, --logic-filter
+        turn on ELM instance-logic filtering, if there are known false positive ELMs of this class matching the assigned sequence exclude from results 
+    -t <>, --type=<>
+        only include ELM classes of a given type: CLV (cleavage sites), DEG (degradation sites), DOC (docking sites), LIG (ligand binding sites), MOD (ptm sites), TRG (targeting sites)
+
+=head1 DESCRIPTION
+
+mELM lets you get Eukaryotic Linear Motif assignments to protein sequences. The script automatically downloads the latest ELM library for you from http://elm.eu.org when you first use it.
+
+=head1 EXAMPLES
+
+Soft mask regions of a protein that do not contain any plausible ELM motifs
+
+    melm human_proteins.fa > human_proteins_motifs.fa
+
+Soft mask all regions of a protein that contain less than two linear motif classes, accounting for known false positives
+
+    melm --num-motifs=2 --logic-filter human_proteins.fa > human_proteins_motif_rich.fa
+
+Mask all PTM sites with 'X' in a set of seqences
+
+    melm --hard-mask --mask-motifs --type=MOD human_proteins.fa > human_no_ptms.fa
+
+Get a GFF3 file for a whole genomes worth of protein annotations
+
+    melm --assign --GFF3 human_proteins.fa > human_motifs.gff3
+
+Get the latest ELM classes library for use in another script or by yourself
+
+    melm --update --list-classes
+
+Get the latest ELM instances library for use in another script or by yourself
+
+    melm --update --list-instances
+
+=head1 AUTHOR
+
+B<Matt Oates> - I<mattoates@gmail.com>
+
+=head1 LICENSE
+
+    melm - Mask and assign ELM motifs in protein sequence libraries
+    Copyright (C) 2014  Dr Matt E. Oates
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as
+    published by the Free Software Foundation, either version 3 of the
+    License, or (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+=head1 EDIT HISTORY
+
+2014-08-30 - Matt Oates
+    * First features added.
+
+2014-09-05 - Matt Oates
+    * Masking with only specific ELM classes included based on expect value and motif type
+
+2014-09-08 - Matt oates
+    * ELM instance downloading
+    * False Positive logic filtering based on ELM instances library.
+    * GFF3 and assignment output
+
+=head1 TODO
+
+    * Perhaps add ANCHOR assignment if it's installed as an extra filtering step
+
+=cut
+
+#Pragmata
+use warnings;
+use strict;
+use autodie;
+use feature 'say';
+
+#Core Deps
+use Getopt::Long;
+use Pod::Usage;
+use Data::Dumper;
+#Make eval of dump simpler
+$Data::Dumper::Terse=1;
+
+#Non Core Deps
+use Bio::SeqIO;
+use LWP::UserAgent;
+#Have a single global user agent rather than creating over and over inside get_www
+my $ua = LWP::UserAgent->new;
+
+#Globals
+my %elms; #The ELM classes to be used, either retreived from a cached file or populated from the web
+
+
+#Amino acids probabilities used for expect scoring, calculated from looking at all eukaryotic sequences in the SUPERFAMILY database.
+my %amino_probs = ('A' => 0.074253,
+                'C' => 0.009697,
+                'D' => 0.050147,
+                'E' => 0.089011,
+                'F' => 0.018359,
+                'G' => 0.073955,
+                'H' => 0.025784,
+                'I' => 0.026977,
+                'K' => 0.061170,
+                'L' => 0.073093,
+                'M' => 0.019150,
+                'N' => 0.033851,
+                'P' => 0.094297,
+                'Q' => 0.056396,
+                'R' => 0.063802,
+                'S' => 0.104119,
+                'T' => 0.059547,
+                'V' => 0.045399,
+                'W' => 0.006850,
+                'Y' => 0.014141);
+
+#Ambiguous amino acids are just as expected as the combination they represent
+$amino_probs{B} = $amino_probs{N} + $amino_probs{D};
+$amino_probs{Z} = $amino_probs{E} + $amino_probs{Q};
+$amino_probs{J} = $amino_probs{I} + $amino_probs{L};
+
+#Probability of an amino acid given an amino acid, maximum confusion minimum self information
+$amino_probs{X} = 1.0;
+
+
+#User options
+my $help;
+my $verbose;
+my $update;
+my $list_classes;
+my $list_instances;
+my $classes_version = '???';
+my $instances_version = '???';
+my $max_class_expect;
+my $hard_mask;
+my $mask_motifs = 0;
+my $do_assignment;
+my $num_elms = 1;
+my $min_elm_complexity;
+my $max_elm_probability;
+my $logic_filter;
+my $type;
+my $gff;
+
+#Flags used h,v,u,c,i,a,E,X,m,n,C,P,l,t
+GetOptions(
+    "help|h!" => \$help,
+    "verbose|v!" => \$verbose,
+    "update|u!" => \$update,
+    "list-classes|c" => \$list_classes,
+    "list-instances|i" => \$list_instances,
+    "assign|a!" => \$do_assignment,
+    "max-class-expect|E=f" => \$max_class_expect,
+    "hard-mask|X!" => \$hard_mask,
+    "mask-motifs|m!" => \$mask_motifs,
+    "num-elms|n=i" => \$num_elms,
+    "min-elm-complexity|C=f" => \$min_elm_complexity,
+    "max-elm-probability|P=f" => \$max_elm_probability,
+    "logic-filter|l!" => \$logic_filter,
+    "type|t=s" => \$type,
+    "GFF3|G!" => \$gff,
+) or die "Fatal Error: Problem parsing command-line ".$!;
+
+my @fasta_files = @ARGV;
+
+#Print out some help if it was asked for or if no arguments were given.
+pod2usage(-exitstatus => 0, -verbose => 2) if $help;
+
+pod2usage(-exitstatus => 0, -verbose => 1, -msg => 'Please provide some sequence files to mask or assign to.') 
+    unless $update or $list_classes or $list_instances or scalar @fasta_files >= 1;
+
+#Take an arrayref of numbers or a delimited string and returns a list of start-end pairs for runs of values above a threshold
+sub runencode {
+        my ($probs,%opts) = @_;
+        
+        #Some default optional parameters
+        $opts{delimiter} //= ','; 
+        $opts{threshold} //= 0.5;
+        $opts{cmp} //= sub {$_[0] >= $_[1]};
+
+        #If a string was passed split it into values
+        $probs = [split /$opts{delimiter}/, $probs] if (ref $probs ne 'ARRAY');
+        my @ranges = ();
+        my $index = 1;
+        my $start = undef;
+        my $end = undef;
+
+        foreach my $prob (@$probs) {
+                if ($opts{cmp}->($prob, $opts{threshold})) {
+                        $start = $index unless defined $start;
+                } else {
+                        $end = $index-1;
+                        push @ranges, [$start, $end] if defined $start;
+                        $start = undef;
+                }
+                $index++;
+        }
+
+        #Deal with the edge case where there is a region at the end of the sequence
+        if ($probs->[-1] >= 0.5) {
+                        $end = $index-1;
+                        push @ranges, [$start, $end] if defined $start;
+        }
+
+        return \@ranges;
+}
+
+sub amino_prob {
+    my ($amino) = @_;
+    if (exists $amino_probs{$amino}) {
+        return $amino_probs{$amino};
+    } else {
+        warn "Amino acid not found: $amino";
+        #Magic number, aa character is almost 0 probability, this should perhaps be 1.0 to ignore weird characters
+        return 4.94065645841247e-324; 
+    }
+}
+
+sub logic_filter_ok {
+    my ($elm_name, $seq, %opt) = @_;
+    $opt{logic} //= 'FP'; #Default to removing only False Positives
+    my %filters = map {$_->{seq} => undef} grep {$_->{logic} = $opt{logic}} @{$elms{$elm_name}{instances}};
+    return (not exists $filters{$seq})?1:0;
+}
+
+sub score {
+    my ($sequence) = @_;
+    #my @aminos = unpack 'C*', $sequence;
+    warn "Sequence was empty" and return (0.0,0.0) if $sequence eq '';
+    my @aminos = split //, $sequence;
+    my $a = shift(@aminos);
+    while ($a eq 'U' or $a eq 'O') { $a = shift(@aminos); }
+    my $prob = amino_prob($a);
+    my $log = log(2.0);
+    my $entropy = $prob * (log(1/$prob)/$log);
+    #$prob *= amino_prob($_) for @aminos;
+    foreach my $amino (@aminos) {
+        if ( (uc $amino eq 'U') or (uc $amino eq 'O') ) { next; }
+        $prob *= amino_prob($amino);
+        $entropy += amino_prob($amino) * (log(1.0/amino_prob($amino))/$log);
+    }
+    
+    return ($prob,$entropy,$entropy / length $sequence);
+}
+
+#Take a regular expression and return all of the ([start,end,substr]...) matched results
+sub assign {
+    my ($elm_name, $regex, $string) = @_;
+    my @ret;
+    my ($start,$end,$seq,$prob,$entropy,$entrorate);
+    while ($string =~ /($regex)/g) {
+        ($start,$end,$seq) = ($-[0]+1, $+[0], $&);
+        if ($logic_filter) {
+            next unless logic_filter_ok($elm_name,$seq,logic => $logic_filter);
+        }
+        ($prob, $entropy, $entrorate) = score($seq);
+        if ($max_elm_probability) {
+            say "FAILED" if $prob > $max_elm_probability;
+            next if $prob > $max_elm_probability;
+        }
+        if ($min_elm_complexity) {
+            next if $entropy < $min_elm_complexity;
+        }
+        push @ret, [$elm_name, $start, $end, $seq, $prob, $entropy, $entrorate];
+    }
+    if (@ret < 1) {
+        return;
+    } else {
+        return \@ret;
+    }
+}
+
+#Collapse multiple assignments into a single list of disjoint ([start,end]...) and per residue counts of collapsed data
+sub collapse_assignment {
+    my ($sequence,$assignments,%opt) = @_;
+
+    #Create a list of assignment counts per residue
+    my @ass = (0) x length $sequence;
+    foreach my $motif (map {@$_} @$assignments) {
+        $ass[$_-1]++ for $motif->[1]..$motif->[2];
+    }
+
+    #Invert the assignment counts, i.e. mark everything that wasn't asigned as being assigned
+    #so [5,3,2,1,1,1,2,0,0,3] becomes [0,0,0,0,0,0,0,1,1,0]
+    if ($opt{invert}) {
+        $_ = abs +($_ >= 1) - 1 for @ass;
+    }
+
+    #Runlength encode the assignment flags to get paired assignments again
+    #return (\runencode(\@ass), \@ass);
+    return runencode(\@ass, threshold => $num_elms);
+}
+
+#Mask a string hard/soft based on a list of start,end pairs [[start,end],...]
+sub mask {
+    my ($sequence,$assignments,%opt) = @_;
+    foreach my $assignment (@$assignments) {
+        if ($opt{hard_mask}) {
+            substr($sequence,$assignment->[0]-1,1+$assignment->[1]-$assignment->[0]) = 'x' x (1+$assignment->[1]-$assignment->[0]);  
+        } else {
+            substr($sequence,$assignment->[0]-1,1+$assignment->[1]-$assignment->[0]) = lc substr($sequence,$assignment->[0]-1,1+$assignment->[1]-$assignment->[0]);  
+        }
+    }
+    $sequence;
+}
+
+#Get a webpage as a string
+sub get_www {
+    my ($url) = @_;
+    my $response = $ua->get($url);
+    if ($response->is_success) {
+       return $response->decoded_content;
+    } else {
+        die "Failed to update ELM whilst contacting $url: " . $response->status_line;
+    }
+}
+
+#Refresh the cached ELM classes file and populate %elms with latest data
+sub update_elm_classes {
+    my $class_tsv = get_www('http://elm.eu.org/elms/browse_elms.tsv');
+    #Each record looks like:
+    #Accession  ELMIdentifier   Description Regex   Probability #Instances  #Instances_in_PDB
+    #ELME000080"    "TRG_PEX_1" "Wxxx[FY] motifs present in N-terminal half of Pex5 bind to Pex13 and Pex14 at peroxisomal and glycosomal membranes to facilitate entrance of PTS1 cargo proteins into the organellar lumen. =>"W...[FY] =>"0.000222625 =>"27"  "1"
+    foreach my $record (split /\n/, $class_tsv) {
+        (undef,$classes_version) = split /: /, $record if ($record =~ /^#ELM_Classes_Download_Version/);
+        next if $record =~ /^(#|"Accession)/; #Ignore the header
+        $record =~ s/"//g;
+        my ($elm_id,$elm_name,$description,$regex,$probability,$instances,$instances_in_pdb) = split /\t/, $record;
+        my ($type) = split /_/, $elm_name;
+        $elms{$elm_name} = {accession => $elm_id, type => $type, description => $description, regex => $regex, probability => $probability};
+    }
+    open my $elm_fh,'>',"$ENV{HOME}/.elm.dat";
+    say $elm_fh Dumper([$classes_version,$instances_version,\%elms]);
+    close $elm_fh;
+    say STDERR "Updated ELM library to version $classes_version" if $verbose;
+}
+
+#Get the sequence for an instance from ELM
+sub get_instance_seqs {
+    say STDERR "Downloading instance protein sequences from ELM." if $verbose;
+    my $fasta = get_www("http://elm.eu.org/elms/browse_instances.fasta?q=*");
+    my %sequences;
+    #Hard assumption, ELM gives out sequences as a single line (appears true)
+    foreach my $record (split />/, $fasta) {
+        next if $record =~ /^\s*$/;
+        my ($id,$seq) = split /\n/, $record;
+        my (undef, $up_id) = split /\|/, $id;
+        $sequences{$up_id} = $seq;
+    }
+    return %sequences;
+}
+
+#Refresh the cached ELM instances data
+sub update_elm_instances {
+    my %instance_logic = ('false positive' => 'FP','true negative' => 'TN','true positive', => 'TP', 'unknown' => 'U');
+    my $instances_tsv = get_www('http://elm.eu.org/elms/browse_instances.tsv?q=*');
+    my %uniprot_sequences = get_instance_seqs();
+    #Each record looks like:
+    #Accession, ELMType, ELMIdentifier, ProteinName, Primary_Acc, Accessions, Start, End, References, Methods, InstanceLogic, PDB, Organism
+    #"ELMI000471"   "LIG"   "LIG_SH2_SRC"   "SRC_HUMAN" "P12931"    "P12931 E1P5V4 Q76P87 Q86VB9 Q9H5A8"    "530"   "533"   "10360179"  "x-ray crystallography" "true positive" ""  "Homo sapiens"
+    foreach my $record (split /\n/, $instances_tsv) {
+        (undef,$instances_version) = split /: /, $record if ($record =~ /^#ELM_Instance_Download_Version/);
+        next if $record =~ /^(#|"Accession)/; #Ignore the header
+        $record =~ s/"//g;
+        my ($elm_id, $type, $elm_name, $protein_name, $up_id, $alt_up_id, $start, $end, $references, $methods, $logic, $pdb, $organism) = split /\t/, $record;
+        my $seq = substr( $uniprot_sequences{$up_id}, $start-1, 1+$end-$start );
+        push @{$elms{$elm_name}{instances}}, {accession => $elm_id, id => $up_id, start => $start, end => $end, logic => $instance_logic{$logic},
+                                            seq => $seq};
+    }
+    say STDERR "Instances data updated to version $instances_version." if $verbose;
+    open my $elm_fh,'>',"$ENV{HOME}/.elm.dat";
+    say $elm_fh Dumper([$classes_version,$instances_version,\%elms]);
+    close $elm_fh;
+}
+
+#Load the cached ELM classes/instances data
+sub load_elm_classes {
+    local $/; #slurp
+    open my $elm_fh, '<', "$ENV{HOME}/.elm.dat";
+    my $classes;
+    ($classes_version, $instances_version, $classes) =  @{ eval <$elm_fh> };
+    %elms = %$classes;
+    close $elm_fh;
+    say STDERR "Using ELM class library version $classes_version and instances version $instances_version, you can update this with `melm --update`" if $verbose;
+}
+
+#Update the ELM classes file and populate %elms
+if ($update or not -e "$ENV{HOME}/.elm.dat") {
+    say STDERR "Updating ELM classes file $ENV{HOME}/.elm.dat" if $verbose;
+    update_elm_classes();
+    update_elm_instances();
+}
+#Otherwise slurp in the cached %elms
+else {
+    load_elm_classes();
+}
+
+if (defined $list_classes) {
+    say "#Cached melm data for version $classes_version of the ELM classes library";
+    say "#" . join "\t", 'Accession', 'Type', 'Name', 'Description', 'Regex', 'Expectation';
+    foreach my $elm (keys %elms) {
+        say "$elms{$elm}{accession}\t$elms{$elm}{type}\t$elm\t$elms{$elm}{description}\t$elms{$elm}{regex}\t$elms{$elm}{probability}";
+    }
+    exit;
+}
+
+if (defined $list_instances) {
+    say "#Cached melm data for version $instances_version of the ELM instances library";
+    say "#" . join "\t", 'Accession', 'Name', 'Primary UniProt Accession', 'Start', 'End', 'Sequence', 'Assignment Logic';
+    foreach my $elm (keys %elms) {
+        foreach my $instance (@{$elms{$elm}{instances}}) {
+            say "$instance->{accession}\t$elm\t$instance->{id}\t$instance->{start}\t$instance->{end}\t$instance->{seq}\t$instance->{logic}";
+        }
+    }
+    exit;
+}
+
+#Remove those ELM classes that are below the user defined probability threshold
+if (defined $max_class_expect) {
+    say STDERR "Removing ELM classes with a probability greater than $max_class_expect" if $verbose;
+    delete $elms{ $_ } for grep { $elms{$_}{probability} >= $max_class_expect } keys %elms;
+}
+
+if (defined $type) {
+    say STDERR "Only using ELM classes of type $type" if $verbose;
+    delete $elms{ $_ } for grep { $elms{$_}{type} ne $type } keys %elms;
+}
+
+if ($do_assignment) {
+    if ($gff) {
+        say "##gff-version 3";
+    } else {
+        say "seqid\telm_id\tstart\tend\telm_seq\tprob\tentropy\tentropy_rate";
+    }
+}
+
+my $gff_id = 1;
+#Process each input sequence file
+foreach my $file (@fasta_files) {
+    my $seqin = Bio::SeqIO->new(-file => $file);
+    my $seqout = Bio::SeqIO->new(-fh => \*STDOUT, -format => 'fasta');
+    #For each sequence do ELM assignment
+    while (my $seq = $seqin->next_seq) {
+        #over the whole library
+        my @assignment;
+        foreach my $elm (keys %elms) {
+            push @assignment, assign($elm,$elms{$elm}{regex}, $seq->seq);
+        }
+        if ($do_assignment) {
+            foreach my $assignment (@assignment) {
+                #sequence_motif
+                if ($gff) {
+                    foreach my $ass (@$assignment) {
+                        say $seq->id . "\tmELM\tsequence_motif\t$ass->[1]\t$ass->[2]\t$ass->[4]\t.\t.\tID=$gff_id;Name=$ass->[0];Alias=$elms{$ass->[0]}{accession}";
+                        $gff_id++;
+                    }
+                } else {
+                    say join "\t", $seq->id, @$_ for @$assignment;
+                }
+            }
+        } else {
+            $seq->seq(mask($seq->seq, collapse_assignment($seq->seq, \@assignment, invert => !$mask_motifs), hard_mask => $hard_mask));
+            $seqout->write_seq($seq);
+        }
+    }
+}
