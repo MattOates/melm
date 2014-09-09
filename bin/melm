@@ -1,11 +1,11 @@
 #!/usr/bin/env perl
 =head1 NAME
 
-I<melm> - Sequence masking of assigned ELM motifs
+I<melm> - mELM masking of assigned ELM motifs
 
 =head1 USAGE
 
- melm [h,v,u,c,i,a,G,E,X,m,n,C,P,l,t] <SEQ FILES...>
+ melm [h,v,u,c,i,a,G,E,X,m,n,C,P,l,t,M,D,d] <SEQ FILES...>
     -h, --help
         this message
     -v, --verbose
@@ -36,10 +36,33 @@ I<melm> - Sequence masking of assigned ELM motifs
         turn on ELM instance-logic filtering, if there are known false positive ELMs of this class matching the assigned sequence exclude from results 
     -t <>, --type=<>
         only include ELM classes of a given type: CLV (cleavage sites), DEG (degradation sites), DOC (docking sites), LIG (ligand binding sites), MOD (ptm sites), TRG (targeting sites)
+    -M, --morf-filter
+        if ANCHOR is installed use that to filter ELM output based on those having shared coverage with a predicted MoRF region
+    -D, --disorder-filter
+        if ANCHOR is installed use that to filter ELM output based on ANCHOR's IUPred disorder prediction, only include ELMs that fall within disordered regions
+    -d <>, --anchor-datapath=<>
+        provide the location of the anchor data path, mELM will otherwise assume it's in the same directory as your anchor binary
 
 =head1 DESCRIPTION
 
 mELM lets you get Eukaryotic Linear Motif assignments to protein sequences. The script automatically downloads the latest ELM library for you from http://elm.eu.org when you first use it.
+
+Please make sure to cite the original ELM authors when using mELM results:
+    Holger Dinkel, Kim Van Roey, Sushama Michael, Norman E. Davey, 
+    Robert J. Weatheritt, Diana Born, Tobias Speck, Daniel Krüger, 
+    Gleb Grebnev, Marta Kubań, Marta Strumillo, Bora Uyar, 
+    Aidan Budd, Brigitte Altenberg, Markus Seiler, Lucía B. Chemes,
+    Juliana Glavina, Ignacio E. Sánchez, Francesca Diella, 
+    and Toby J. Gibson (2014)
+    The eukaryotic linear motif resource ELM: 10 years and counting
+    Nucl. Acids Res. 42(D1): D259-D266 
+    doi:10.1093/nar/gkt1047
+
+If you have used mELM with ANCHOR predictions please cite the following:
+    Bálint Mészáros, István Simon and Zsuzsanna Dosztányi (2009) 
+    Prediction of Protein Binding Regions in Disordered Proteins
+    PLoS Comput Biol 5(5): e1000376. 
+    doi:10.1371/journal.pcbi.1000376
 
 =head1 EXAMPLES
 
@@ -97,14 +120,19 @@ B<Matt Oates> - I<mattoates@gmail.com>
 2014-09-05 - Matt Oates
     * Masking with only specific ELM classes included based on expect value and motif type
 
-2014-09-08 - Matt oates
+2014-09-08 - Matt Oates
     * ELM instance downloading
     * False Positive logic filtering based on ELM instances library.
     * GFF3 and assignment output
 
+2014-09-09 - Matt Oates
+    * Integrated ANCHOR predictions if this is installed on the system (independent of OS)
+    * Limit motif assignment to predicted binding regions (MoRF) 
+    * Limit motif assignment to predicted disordered regions
+
 =head1 TODO
 
-    * Perhaps add ANCHOR assignment if it's installed as an extra filtering step
+    * Create an HTML output report with everything in
 
 =cut
 
@@ -115,6 +143,9 @@ use autodie;
 use feature 'say';
 
 #Core Deps
+use File::Basename;
+use IPC::Cmd qw[can_run run run_forked];
+use List::Util qw/min max sum/;
 use Getopt::Long;
 use Pod::Usage;
 use Data::Dumper;
@@ -178,10 +209,13 @@ my $num_elms = 1;
 my $min_elm_complexity;
 my $max_elm_probability;
 my $logic_filter;
+my $morf_filter;
+my $disorder_filter;
 my $type;
 my $gff;
+my $anchor_datapath;
 
-#Flags used h,v,u,c,i,a,G,E,X,m,n,C,P,l,t
+#Flags used h,v,u,c,i,a,G,E,X,m,n,C,P,l,t,M,D,d
 GetOptions(
     "help|h!" => \$help,
     "verbose|v!" => \$verbose,
@@ -198,7 +232,13 @@ GetOptions(
     "logic-filter|l!" => \$logic_filter,
     "type|t=s" => \$type,
     "GFF3|G!" => \$gff,
+    "morf-filter|M!" => \$morf_filter,
+    "disorder-filter|D!" => \$disorder_filter,
+    "anchor-datapath|d=s" => \$anchor_datapath,
 ) or die "Fatal Error: Problem parsing command-line ".$!;
+
+#If we need anchor make sure it's there first
+check_anchor_installation() if ($morf_filter or $disorder_filter);
 
 my @fasta_files = @ARGV;
 
@@ -208,10 +248,110 @@ pod2usage(-exitstatus => 0, -verbose => 2) if $help;
 pod2usage(-exitstatus => 0, -verbose => 1, -msg => 'Please provide some sequence files to mask or assign to.') 
     unless $update or $list_classes or $list_instances or scalar @fasta_files >= 1;
 
+#Test if ANCHOR is installed and get the directory where it's located assuming this is the datapath
+sub check_anchor_installation {
+    $anchor_datapath = can_run('anchor') or die "ANCHOR is not installed on this machine, you can get it from http://anchor.enzim.hu/";
+    $anchor_datapath = dirname($anchor_datapath);
+}
+
+sub anchor {
+    my ($sequence) = @_;
+
+    #Run ANCHOR
+    my $results = run_forked( "anchor -d $anchor_datapath -v /dev/stdin", { child_stdin => ">test\n$sequence\n", timeout => 600} );
+    my @lines = split /\n/, $results->{stdout};
+
+    #Return values
+    my @iupred_probs = ();
+    my @anchor_probs = ();
+    my @anchor_ranges = ();
+
+    #   Columns:
+    #   1 - Amino acid number
+    #   2 - One letter code
+    #   3 - ANCHOR probability value
+    #   4 - ANCHOR output
+    #   5 - IUPred probability value
+    #   6 - ANCHOR score 
+    #   7 - S 
+    #   8 - Eint 
+    #   9 - Egain
+
+    my $line = shift @lines;
+    my $nextline;
+    while ($line) {
+        
+        #Look a single line ahead to work out when we are at the end of a record
+        $nextline = shift @lines;
+
+        #If we are at the start of the file get the binding regions
+        if ($line =~ /^# ANCHOR/) {
+            #Then skip to the Predicted binding regions table
+            while ($line !~ /^# Predicted binding regions/) { $line = $nextline; $nextline = shift @lines; }
+            $line = $nextline;
+            $nextline = shift @lines;
+            #If we have some predicted binding sites add them to the list
+            if ($line !~ /none/i) {
+                while ($line !~ /^#$/) {
+                    $line = $nextline;
+                    $nextline = shift @lines;
+                    last if $line =~ /^#$/;
+                    $line =~ s/^#\s+//;
+                    my (undef, $start, $end) = split /\s+/, $line;
+                    push @anchor_ranges, [$start,$end];
+                }
+            }
+        }
+
+        #Ignore blank lines
+        if ($line eq '') {
+            $line = $nextline;
+            next;
+        }
+
+        #If a line doesn't start with a hash assume it's model output
+        if ($line !~ /^#/) {
+            $line =~ s/^\s+//; #Trim any leading white space
+            #Only bother to store the probability columns for this protein
+            my (undef,undef,$anchor_prob,undef,$iupred_prob) = split /\s+/, $line;
+            #Push these onto the list
+            $anchor_prob =~ s/\s//g;
+            $anchor_prob =~ s/0+$//g;
+            $iupred_prob =~ s/\s//g;
+            $iupred_prob =~ s/0+$//g;
+            push @anchor_probs, $anchor_prob;
+            push @iupred_probs, $iupred_prob;
+        }
+
+        $line = $nextline;
+    }
+
+    return (\@anchor_ranges,\@anchor_probs,\@iupred_probs);
+}
+
+#Efficiently calculate the coverage between two number line segments
+sub coverage {
+    my ($a,$b,$x,$y) = @_;
+    return max(min((1+$b-$a),(1+$y-$x),(1+abs($b-$a)+abs($y-$x))-(max($a,$b,$x,$y)-min($a,$b,$x,$y))),0);
+}
+
+#Report if there is any overlap between a single defined region and a set of regions
+sub any_overlap {
+    my ($start,$end,$pairs) = @_;
+    foreach my $pair (@$pairs) {
+        return 1 if coverage($start,$end,$pair->[0],$pair->[1]);
+    }
+    return 0;
+}
+
 #Take an arrayref of numbers or a delimited string and returns a list of start-end pairs for runs of values above a threshold
 sub runencode {
         my ($probs,%opts) = @_;
-        
+        unless (defined $probs) {
+            warn "undef passed to runencode!";
+            return;
+        }
+
         #Some default optional parameters
         $opts{delimiter} //= ','; 
         $opts{threshold} //= 0.5;
@@ -284,7 +424,7 @@ sub score {
 
 #Take a regular expression and return all of the ([start,end,substr]...) matched results
 sub assign {
-    my ($elm_name, $regex, $string) = @_;
+    my ($elm_name, $regex, $string, $morf_regions, $dis_regions) = @_;
     my @ret;
     my ($start,$end,$seq,$prob,$entropy,$entrorate);
     while ($string =~ /($regex)/g) {
@@ -298,6 +438,12 @@ sub assign {
         }
         if ($min_elm_complexity) {
             next if $entrorate < $min_elm_complexity;
+        }
+        if ($morf_filter) {
+            next unless any_overlap($start,$end,$morf_regions);
+        }
+        if ($disorder_filter) {
+            next unless any_overlap($start,$end,$dis_regions);
         }
         push @ret, [$elm_name, $start, $end, $seq, $prob, $entropy, $entrorate];
     }
@@ -432,6 +578,7 @@ else {
     load_elm_classes();
 }
 
+#Dump out the ELM classes cache
 if (defined $list_classes) {
     say "#Cached melm data for version $classes_version of the ELM classes library";
     say "#" . join "\t", 'Accession', 'Type', 'Name', 'Description', 'Regex', 'Expectation';
@@ -441,6 +588,7 @@ if (defined $list_classes) {
     exit;
 }
 
+#Dump out the ELM instances cache
 if (defined $list_instances) {
     say "#Cached melm data for version $instances_version of the ELM instances library";
     say "#" . join "\t", 'Accession', 'Name', 'Primary UniProt Accession', 'Start', 'End', 'Sequence', 'Assignment Logic';
@@ -458,11 +606,13 @@ if (defined $max_class_expect) {
     delete $elms{ $_ } for grep { $elms{$_}{probability} >= $max_class_expect } keys %elms;
 }
 
+#Remove all the ELM classes but the type requested
 if (defined $type) {
     say STDERR "Only using ELM classes of type $type" if $verbose;
     delete $elms{ $_ } for grep { $elms{$_}{type} ne $type } keys %elms;
 }
 
+#If we are outputting full assignment setup a header
 if ($do_assignment) {
     if ($gff) {
         say "##gff-version 3";
@@ -478,10 +628,19 @@ foreach my $file (@fasta_files) {
     my $seqout = Bio::SeqIO->new(-fh => \*STDOUT, -format => 'fasta');
     #For each sequence do ELM assignment
     while (my $seq = $seqin->next_seq) {
+
+        #Handle any disorder/morf prediction
+        my ($morf_regions, $dis_regions, $anchor, $iupred);
+        if ($morf_filter or $disorder_filter) {
+            ($morf_regions, $anchor, $iupred) = anchor($seq->seq);
+            $dis_regions = runencode($iupred);
+            print Dumper ($morf_regions,$dis_regions);
+        }
+
         #over the whole library
         my @assignment;
         foreach my $elm (keys %elms) {
-            push @assignment, assign($elm,$elms{$elm}{regex}, $seq->seq);
+            push @assignment, assign($elm,$elms{$elm}{regex}, $seq->seq, $morf_regions, $dis_regions);
         }
         if ($do_assignment) {
             foreach my $assignment (@assignment) {
