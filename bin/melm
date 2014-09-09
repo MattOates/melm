@@ -5,7 +5,7 @@ I<melm> - Sequence masking of assigned ELM motifs
 
 =head1 USAGE
 
- melm [h,v,u,c,i,a,E,X,m,n,C,P,l,t] <SEQ FILES...>
+ melm [h,v,u,c,i,a,G,E,X,m,n,C,P,l,t] <SEQ FILES...>
     -h, --help
         this message
     -v, --verbose
@@ -181,7 +181,7 @@ my $logic_filter;
 my $type;
 my $gff;
 
-#Flags used h,v,u,c,i,a,E,X,m,n,C,P,l,t
+#Flags used h,v,u,c,i,a,G,E,X,m,n,C,P,l,t
 GetOptions(
     "help|h!" => \$help,
     "verbose|v!" => \$verbose,
@@ -294,11 +294,10 @@ sub assign {
         }
         ($prob, $entropy, $entrorate) = score($seq);
         if ($max_elm_probability) {
-            say "FAILED" if $prob > $max_elm_probability;
             next if $prob > $max_elm_probability;
         }
         if ($min_elm_complexity) {
-            next if $entropy < $min_elm_complexity;
+            next if $entrorate < $min_elm_complexity;
         }
         push @ret, [$elm_name, $start, $end, $seq, $prob, $entropy, $entrorate];
     }
@@ -403,8 +402,7 @@ sub update_elm_instances {
         $record =~ s/"//g;
         my ($elm_id, $type, $elm_name, $protein_name, $up_id, $alt_up_id, $start, $end, $references, $methods, $logic, $pdb, $organism) = split /\t/, $record;
         my $seq = substr( $uniprot_sequences{$up_id}, $start-1, 1+$end-$start );
-        push @{$elms{$elm_name}{instances}}, {accession => $elm_id, id => $up_id, start => $start, end => $end, logic => $instance_logic{$logic},
-                                            seq => $seq};
+        push @{$elms{$elm_name}{instances}}, {accession => $elm_id, id => $up_id, start => $start, end => $end, logic => $instance_logic{$logic}, seq => $seq};
     }
     say STDERR "Instances data updated to version $instances_version." if $verbose;
     open my $elm_fh,'>',"$ENV{HOME}/.elm.dat";
