@@ -5,13 +5,15 @@ I<melm> - mELM masking of assigned ELM motifs
 
 =head1 USAGE
 
- melm [h,v,u,c,i,a,G,E,X,m,n,C,P,l,t,M,D,d] <SEQ FILES...>
+ melm [h,v,u,U,c,i,a,G,E,X,m,n,C,P,l,t,M,D,d] <SEQ FILES...>
     -h, --help
         this message
     -v, --verbose
         receive information about what melm is doing
     -u, --update 
         download and start using the latest class definitions from ELM.eu.org
+    -U, --upgrade
+        upgrade mELM to the latest version from GitHub.com/MattOates/melm
     -c, --list-classes
         get TSV output for the current ELM classes library melm is using 
     -i, --list-instances
@@ -130,6 +132,9 @@ B<Matt Oates> - I<mattoates@gmail.com>
     * Limit motif assignment to predicted binding regions (MoRF) 
     * Limit motif assignment to predicted disordered regions
 
+2014-09-10
+    * Allowed for the script to upgrade itself from GitHub and made it a bit more friendly to use
+
 =head1 TODO
 
     * Create an HTML output report with everything in
@@ -144,7 +149,8 @@ use feature 'say';
 
 #Core Deps
 use File::Basename;
-use IPC::Cmd qw[can_run run run_forked];
+use Cwd qw/abs_path/;
+use IPC::Cmd qw/can_run run_forked/;
 use List::Util qw/min max sum/;
 use Getopt::Long;
 use Pod::Usage;
@@ -154,9 +160,9 @@ $Data::Dumper::Terse=1;
 
 #Non Core Deps
 use Bio::SeqIO;
-use LWP::UserAgent;
-#Have a single global user agent rather than creating over and over inside get_www
-my $ua = LWP::UserAgent->new;
+
+#Current version of the script
+our $VERSION = "1.3";
 
 #Globals
 my %elms; #The ELM classes to be used, either retreived from a cached file or populated from the web
@@ -197,6 +203,7 @@ $amino_probs{X} = 1.0;
 my $help;
 my $verbose;
 my $update;
+my $upgrade;
 my $list_classes;
 my $list_instances;
 my $classes_version = '???';
@@ -215,11 +222,12 @@ my $type;
 my $gff;
 my $anchor_datapath;
 
-#Flags used h,v,u,c,i,a,G,E,X,m,n,C,P,l,t,M,D,d
+#Flags used h,v,u,U,c,i,a,G,E,X,m,n,C,P,l,t,M,D,d
 GetOptions(
     "help|h!" => \$help,
     "verbose|v!" => \$verbose,
     "update|u!" => \$update,
+    "upgrade|U!" => \$upgrade,
     "list-classes|c" => \$list_classes,
     "list-instances|i" => \$list_instances,
     "assign|a!" => \$do_assignment,
@@ -245,8 +253,8 @@ my @fasta_files = @ARGV;
 #Print out some help if it was asked for or if no arguments were given.
 pod2usage(-exitstatus => 0, -verbose => 2) if $help;
 
-pod2usage(-exitstatus => 0, -verbose => 1, -msg => 'Please provide some sequence files to mask or assign to.') 
-    unless $update or $list_classes or $list_instances or scalar @fasta_files >= 1;
+pod2usage(-exitstatus => 0, -verbose => 1, -msg => "mELM version $VERSION by Matt Oates (C) 2014. Please provide some sequence files to mask or assign ELM motifs to.") 
+    unless $update or $upgrade or $list_classes or $list_instances or scalar @fasta_files >= 1;
 
 #Test if ANCHOR is installed and get the directory where it's located assuming this is the datapath
 sub check_anchor_installation {
@@ -491,11 +499,16 @@ sub mask {
 #Get a webpage as a string
 sub get_www {
     my ($url) = @_;
+
+    use LWP::UserAgent;
+    #Decided to localise this and just handle checking for deps properly
+    my $ua = LWP::UserAgent->new;
+
     my $response = $ua->get($url);
     if ($response->is_success) {
        return $response->decoded_content;
     } else {
-        die "Failed to update ELM whilst contacting $url: " . $response->status_line;
+        die "Failed whilst contacting $url: " . $response->status_line;
     }
 }
 
@@ -534,6 +547,26 @@ sub get_instance_seqs {
     return %sequences;
 }
 
+#Upgrade the melm script to the latest version
+sub upgrade {
+    if (eval { require LWP::Protocol::https }) {
+        say STDERR "Upgrading melm version $VERSION to latest from GitHub.";
+        my $melm_path = abs_path(__FILE__);
+        say STDERR "Getting latest melm script from GitHub." if $verbose;
+        my $melm = get_www('https://raw.githubusercontent.com/MattOates/melm/master/bin/melm');
+        say STDERR "Upgrading your copy of melm to latest version." if $verbose;
+        open my $melm_fh, '>', $melm_path or die "Could not open melm script for writing.";
+        binmode($melm_fh, ':utf8');
+        print $melm_fh $melm;
+        close $melm_fh or die "Could not close melm script.";
+        `$melm_path --verbose --update`;
+    } else {
+        say STDERR 'Sorry GitHub requires HTTPS support and your Perl does not have LWP::Protocol::https installed.';
+        say STDERR 'Try `cpanm -i LWP::Protocol::https` to install this module.';
+        exit 1;
+    }
+}
+
 #Refresh the cached ELM instances data
 sub update_elm_instances {
     my %instance_logic = ('false positive' => 'FP','true negative' => 'TN','true positive', => 'TP', 'unknown' => 'U');
@@ -567,11 +600,25 @@ sub load_elm_classes {
     say STDERR "Using ELM class library version $classes_version and instances version $instances_version, you can update this with `melm --update`" if $verbose;
 }
 
+#Upgade the melm script to the latest version
+if ($upgrade) {
+    upgrade();
+    say STDERR "Done!";
+    exit;
+}
+
 #Update the ELM classes file and populate %elms
 if ($update or not -e "$ENV{HOME}/.elm.dat") {
-    say STDERR "Updating ELM classes file $ENV{HOME}/.elm.dat" if $verbose;
-    update_elm_classes();
-    update_elm_instances();
+    if (eval { require LWP::UserAgent }) {
+        say STDERR "Updating ELM classes file $ENV{HOME}/.elm.dat" if $verbose;
+        update_elm_classes();
+        update_elm_instances();
+    } else {
+        say STDERR "On first execution and when updating melm requires your Perl installation to have LWP::UserAgent to contact ELM servers for data.";
+        say STDERR "You might be able to install this module using `cpanm -i LWP::UserAgent`.";
+        say STDERR "Another alternative is to download the latest ELM data from the melm repository at: https://raw.githubusercontent.com/MattOates/melm/master/.elm.dat";
+        say STDERR "Place the .elm.dat file into your home directory: /Users/username (OSX), /home/username (Linux) or C:\\Users\\username (Windows)"
+    }
 }
 #Otherwise slurp in the cached %elms
 else {
@@ -579,7 +626,7 @@ else {
 }
 
 #Dump out the ELM classes cache
-if (defined $list_classes) {
+if ($list_classes) {
     say "#Cached melm data for version $classes_version of the ELM classes library";
     say "#" . join "\t", 'Accession', 'Type', 'Name', 'Description', 'Regex', 'Expectation';
     foreach my $elm (keys %elms) {
@@ -589,7 +636,7 @@ if (defined $list_classes) {
 }
 
 #Dump out the ELM instances cache
-if (defined $list_instances) {
+if ($list_instances) {
     say "#Cached melm data for version $instances_version of the ELM instances library";
     say "#" . join "\t", 'Accession', 'Name', 'Primary UniProt Accession', 'Start', 'End', 'Sequence', 'Assignment Logic';
     foreach my $elm (keys %elms) {
@@ -601,13 +648,13 @@ if (defined $list_instances) {
 }
 
 #Remove those ELM classes that are below the user defined probability threshold
-if (defined $max_class_expect) {
+if ($max_class_expect) {
     say STDERR "Removing ELM classes with a probability greater than $max_class_expect" if $verbose;
     delete $elms{ $_ } for grep { $elms{$_}{probability} >= $max_class_expect } keys %elms;
 }
 
 #Remove all the ELM classes but the type requested
-if (defined $type) {
+if ($type) {
     say STDERR "Only using ELM classes of type $type" if $verbose;
     delete $elms{ $_ } for grep { $elms{$_}{type} ne $type } keys %elms;
 }
