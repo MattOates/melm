@@ -5,7 +5,7 @@ I<melm> - mELM masking of assigned ELM motifs
 
 =head1 USAGE
 
- melm [h,v,u,U,c,i,a,G,E,X,m,n,C,P,l,t,M,D,d] <SEQ FILES...>
+ melm [h,v,u,U,c,i,a,G,E,X,m,n,C,P,l,t,M,D,d,s] <SEQ FILES...>
     -h, --help
         this message
     -v, --verbose
@@ -44,6 +44,8 @@ I<melm> - mELM masking of assigned ELM motifs
         if ANCHOR is installed use that to filter ELM output based on ANCHOR's IUPred disorder prediction, only include ELMs that fall within disordered regions
     -d <>, --anchor-datapath=<>
         provide the location of the anchor data path, mELM will otherwise assume it's in the same directory as your anchor binary
+    -s <>, --sequence=<>
+        Run melm on the provided sequence
 
 =head1 DESCRIPTION
 
@@ -135,6 +137,9 @@ B<Matt Oates> - I<mattoates@gmail.com>
 2014-09-10
     * Allowed for the script to upgrade itself from GitHub and made it a bit more friendly to use
 
+2014-09-17 - Ben Smithers
+    * Support for running melm on a sequence passed on the command line
+
 =head1 TODO
 
     * Create an HTML output report with everything in
@@ -155,6 +160,7 @@ use List::Util qw/min max sum/;
 use Getopt::Long;
 use Pod::Usage;
 use Data::Dumper;
+use File::Temp;
 #Make eval of dump simpler
 $Data::Dumper::Terse=1;
 
@@ -221,6 +227,7 @@ my $disorder_filter;
 my $type;
 my $gff;
 my $anchor_datapath;
+my $cli_seq;
 
 #Flags used h,v,u,U,c,i,a,G,E,X,m,n,C,P,l,t,M,D,d
 GetOptions(
@@ -243,6 +250,7 @@ GetOptions(
     "morf-filter|M!" => \$morf_filter,
     "disorder-filter|D!" => \$disorder_filter,
     "anchor-datapath|d=s" => \$anchor_datapath,
+    "sequence|s=s" => \$cli_seq,
 ) or die "Fatal Error: Problem parsing command-line ".$!;
 
 #If we need anchor make sure it's there first
@@ -254,7 +262,7 @@ my @fasta_files = @ARGV;
 pod2usage(-exitstatus => 0, -verbose => 2) if $help;
 
 pod2usage(-exitstatus => 0, -verbose => 1, -msg => "mELM version $VERSION by Matt Oates (C) 2014. Please provide some sequence files to mask or assign ELM motifs to.") 
-    unless $update or $upgrade or $list_classes or $list_instances or scalar @fasta_files >= 1;
+    unless $update or $upgrade or $list_classes or $list_instances or scalar @fasta_files >= 1 or defined $cli_seq;
 
 #Test if ANCHOR is installed and get the directory where it's located assuming this is the datapath
 sub check_anchor_installation {
@@ -666,6 +674,14 @@ if ($do_assignment) {
     } else {
         say "seqid\telm_id\tstart\tend\telm_seq\tprob\tentropy\tentropy_rate";
     }
+}
+
+#Push on a temp file if we are running a sequence from the command line
+if (defined $cli_seq){
+    my $fh = File::Temp->new();
+    print $fh ">seq\n$cli_seq";
+    push @fasta_files, $fh;
+    close $fh;
 }
 
 my $gff_id = 1;
