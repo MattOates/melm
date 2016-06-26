@@ -1,31 +1,22 @@
-package ELM::Utils 0.1;
+package ELM::Calc 0.1;
+require Exporter;
 
+use v5.20.0;
+use strict;
+use warnings;
+no warnings 'experimental::signatures';
+use feature 'signatures';
 
-#Get a webpage as a string
-sub get_www {
-    my ($url) = @_;
-
-    use LWP::UserAgent;
-    #Decided to localise this and just handle checking for deps properly
-    my $ua = LWP::UserAgent->new;
-
-    my $response = $ua->get($url);
-    if ($response->is_success) {
-       return $response->decoded_content;
-    } else {
-        die "Failed whilst contacting $url: " . $response->status_line;
-    }
-}
+our @ISA = qw(Exporter);
+our @EXPORT_OK = qw(coverage any_overlap runencode);
 
 #Efficiently calculate the coverage between two number line segments
-sub coverage {
-    my ($a,$b,$x,$y) = @_;
+sub coverage($a, $b, $x, $y) {
     return max(min((1+$b-$a),(1+$y-$x),(1+abs($b-$a)+abs($y-$x))-(max($a,$b,$x,$y)-min($a,$b,$x,$y))),0);
 }
 
 #Report if there is any overlap between a single defined region and a set of regions
-sub any_overlap {
-    my ($start,$end,$pairs) = @_;
+sub any_overlap($start, $end, $pairs) {
     foreach my $pair (@$pairs) {
         return 1 if coverage($start,$end,$pair->[0],$pair->[1]);
     }
@@ -33,8 +24,8 @@ sub any_overlap {
 }
 
 #Take an arrayref of numbers or a delimited string and returns a list of start-end pairs for runs of values above a threshold
-sub runencode {
-        my ($probs,%opts) = @_;
+sub runencode($probs, %opts) {
+
         unless (defined $probs) {
             warn "undef passed to runencode!";
             return;
