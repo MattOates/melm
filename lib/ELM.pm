@@ -1,24 +1,23 @@
-package ELM;
+package ELM 0.1;
 
+use v5.20.0;
+use strict;
+use warnings;
+no warnings 'experimental::signatures';
+use feature 'signatures';
+
+use ELM::Library;
 use ELM::Utils;
 use ELM::Anchor;
 use ELM::AminoAcids;
 
-#Globals
-our %elms; #The ELM classes to be used, either retreived from a cached file or populated from the web
+use Class::Tiny qw/type max_class_expect morf_filter disorder_filter logic_filter/, { 
+	library => sub { ELM::Library->new() },
+	anchor => sub { ELM::Anchor->new() },
+};
 
-#Load the cached ELM classes/instances data
-sub load_elm_classes {
-    local $/; #slurp
-    open my $elm_fh, '<', "$ENV{HOME}/.elm.dat";
-    my $classes;
-    ($classes_version, $instances_version, $classes) =  @{ eval <$elm_fh> };
-    %elms = %$classes;
-    close $elm_fh;
-    say STDERR "Using ELM class library version $classes_version and instances version $instances_version, you can update this with `melm --update`" if $verbose;
-}
-
-sub list_classes {
+sub list_classes($self) {
+	my %elms = %{ $self->library->elms };
 	say "#Cached melm data for version $classes_version of the ELM classes library";
     say "#" . join "\t", 'Accession', 'Type', 'Name', 'Description', 'Regex', 'Expectation';
     foreach my $elm (keys %elms) {
@@ -26,7 +25,8 @@ sub list_classes {
     }
 }
 
-sub list_instances {
+sub list_instances($self) {
+	my %elms = %{ $self->library->elms };
 	say "#Cached melm data for version $instances_version of the ELM instances library";
     say "#" . join "\t", 'Accession', 'Name', 'Primary UniProt Accession', 'Start', 'End', 'Sequence', 'Assignment Logic';
     foreach my $elm (keys %elms) {
@@ -36,14 +36,15 @@ sub list_instances {
     }
 }
 
-sub logic_filter_ok {
+sub _logic_filter_ok($self) {
     my ($elm_name, $seq, %opt) = @_;
+    my %elms = %{ $self->library->elms };
     $opt{logic} //= 'FP'; #Default to removing only False Positives
     my %filters = map {$_->{seq} => undef} grep {$_->{logic} = $opt{logic}} @{$elms{$elm_name}{instances}};
     return (not exists $filters{$seq})?1:0;
 }
 
-sub assign_elm {
+sub assign_elm($self) {
 	my ($elm, $seq, %opt) = @_;
 	my $anchor = $opt{morf_filter} || $opt{disorder_filter};
 
@@ -58,8 +59,7 @@ sub assign_elm {
 }
 
 #Assign all ELM classes given filter options to a sequence
-sub assign_all_elms {
-	my ($seq, %opt) = @_;
+sub assign_all_elms($self, $seq, %opt) {
 	my $max_class_expect = $opt{max_class_expect};
 	my $type = $opt{type};
 
@@ -83,14 +83,13 @@ sub assign_all_elms {
 }
 
 #Take a regular expression and return all of the ([start,end,substr]...) matched results
-sub assign {
-    my ($elm_name, $regex, $string, $morf_regions, $dis_regions) = @_;
+sub assign($self, $elm_name, $regex, $string, $morf_regions, $dis_regions) {
     my @ret;
     my ($start,$end,$seq,$prob,$entropy,$entrorate);
     while ($string =~ /($regex)/g) {
         ($start,$end,$seq) = ($-[0]+1, $+[0], $&);
         if ($logic_filter) {
-            next unless logic_filter_ok($elm_name,$seq,logic => $logic_filter);
+            next unless $self->_logic_filter_ok($elm_name,$seq,logic => $logic_filter);
         }
         ($prob, $entropy, $entrorate) = score($seq);
         if ($max_elm_probability) {
