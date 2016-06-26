@@ -118,7 +118,6 @@ B<Matt Oates> - I<mattoates@gmail.com>
 
 2016-06-25 - Matt Oates
     * Huge refactor into split packages allowing more ELM based tools, releases now are fatpacks
-    * First features added to `peep` which predicts if an ELM has lost function given a sequence variant
 
 2016-05-23 - Matt Oates
     * Removed bitrot due to changes at ELM.eu.org and enabled support for v1.4 of ELM
