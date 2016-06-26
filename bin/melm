@@ -155,19 +155,13 @@ use autodie;
 use feature 'say';
 
 #Core Deps
-use File::Basename;
-use Cwd qw/abs_path/;
-use IPC::Cmd qw/can_run run_forked/;
 use List::Util qw/min max sum/;
 use Getopt::Long;
 use Pod::Usage;
-use Data::Dumper;
-#Make eval of dump simpler
-$Data::Dumper::Terse=1;
 
 #Non Core Deps
 use Bio::SeqIO;
-use ELM::Utils;
+use ELM::Utils 'get_www';
 use ELM::AminoAcids;
 use ELM::Anchor;
 
@@ -231,16 +225,32 @@ pod2usage(-exitstatus => 0, -verbose => 2) if $help;
 pod2usage(-exitstatus => 0, -verbose => 1, -msg => "mELM version $VERSION by Matt Oates (C) 2014-2016. Please provide some sequence files to mask or assign ELM motifs to.") 
     unless $update or $upgrade or $list_classes or $list_instances or scalar @fasta_files >= 1;
 
+my $elm = ELM->new;
 
 #Upgade the melm script to the latest version
 if ($upgrade) {
-    upgrade();
+    #Upgrade the melm script to the latest version
+    #TODO refactor this to get the latest release fatpack bundle!
+    #i.e. for $tag=v1.4.0 get https://github.com/MattOates/melm/releases/download/$tag/melm
+    #TODO this has unsafe overwrite without backup of old file, change this!
+
+    say STDERR "Upgrading melm version to latest from GitHub.";
+    my $melm_path = abs_path(__FILE__);
+    say STDERR "Getting latest melm script from GitHub.";
+    my $melm = $self->get_www('https://raw.githubusercontent.com/MattOates/melm/master/bin/melm');
+    say STDERR "Upgrading your copy of melm to latest version.";
+    open my $melm_fh, '>', $melm_path or die "Could not open melm script for writing.";
+    binmode($melm_fh, ':utf8');
+    print $melm_fh $melm;
+    close $melm_fh or die "Could not close melm script.";
+    `$melm_path --verbose --update`;
+
     say STDERR "Done!";
     exit;
 }
 
-#Update the ELM classes file and populate %elms
-if ($update or not -e "$ENV{HOME}/.elm.dat") {
+#Update the ELM classes file and populate elms
+if ($update or not $elm->library->exists) {
     update();
 }
 #Otherwise slurp in the cached %elms
@@ -290,7 +300,7 @@ foreach my $file (@fasta_files) {
                 #sequence_motif
                 if ($gff) {
                     foreach my $ass (@$assignment) {
-                        say $seq->id . "\tmELM\tsequence_motif\t$ass->[1]\t$ass->[2]\t$ass->[4]\t.\t.\tID=$gff_id;Name=$ass->[0];Alias=$elms{$ass->[0]}{accession}";
+                        say $seq->id . "\tmELM\tsequence_motif\t$ass->[1]\t$ass->[2]\t$ass->[4]\t.\t.\tID=$gff_id;Name=$ass->[0];Alias=$elm->library->elms{$ass->[0]}{accession}";
                         $gff_id++;
                     }
                 } else {
