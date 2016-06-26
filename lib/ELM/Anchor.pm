@@ -1,16 +1,27 @@
 package ELM::Anchor 0.1;
 
+use v5.20.0;
+use strict;
+use warnings;
+no warnings 'experimental::signatures';
+use feature 'signatures';
+
+use File::Basename;
+use IPC::Cmd qw/can_run run_forked/;
+
+use Class::Tiny { anchor_datapath => sub {can_run('anchor')} };
+
 #Test if ANCHOR is installed and get the directory where it's located assuming this is the datapath
-sub check_anchor_installation {
-    $anchor_datapath = can_run('anchor') or die "ANCHOR is not installed on this machine, you can get it from http://anchor.enzim.hu/";
-    $anchor_datapath = dirname($anchor_datapath);
+sub check_anchor_installation($self) {
+    die "ANCHOR is not installed on this machine, you can get it from http://anchor.enzim.hu/" unless $self->anchor_datapath ;
+    $self->anchor_datapath(dirname($self->anchor_datapath));
 }
 
-sub anchor {
+sub anchor($self) {
     my ($sequence) = @_;
 
     #Run ANCHOR
-    my $results = run_forked( "anchor -d $anchor_datapath -v /dev/stdin", { child_stdin => ">test\n$sequence\n", timeout => 600} );
+    my $results = run_forked( "anchor -d $self->anchor_datapath -v /dev/stdin", { child_stdin => ">test\n$sequence\n", timeout => 600} );
     my @lines = split /\n/, $results->{stdout};
 
     #Return values
