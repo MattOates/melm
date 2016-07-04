@@ -236,10 +236,10 @@ if ($upgrade) {
     say STDERR "Upgrading melm version to latest from GitHub.";
     my $melm_path = abs_path(__FILE__);
     say STDERR "Getting latest melm script from GitHub.";
-    my $melm = $self->get_www('https://raw.githubusercontent.com/MattOates/melm/master/bin/melm');
+    my $melm = get_www('https://raw.githubusercontent.com/MattOates/melm/master/bin/melm');
     say STDERR "Upgrading your copy of melm to latest version.";
     open my $melm_fh, '>', $melm_path or die "Could not open melm script for writing.";
-    binmode($melm_fh, ':utf8');
+    binmode($melm_fh, ':encoding(utf8)');
     print $melm_fh $melm;
     close $melm_fh or die "Could not close melm script.";
     `$melm_path --verbose --update`;

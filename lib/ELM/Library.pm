@@ -1,4 +1,14 @@
-package ELM::Library 0.1;
+package ELM::Library v1.4.1;
+=encoding UTF-8
+=head1 NAME
+
+ELM::Library - Class to hold the ELM regex library
+
+=head1 VERSION
+
+Version v1.4.1
+
+=cut
 
 use v5.20.0;
 use strict;
@@ -20,17 +30,43 @@ use Class::Tiny qw/elms classes_version instances_version/, {
     }
 };
 
-#Load the ELM classes when we instantiate
+=head1 SYNOPSIS
+
+This class is responsible for all high level operations on creating and maintaining a local ELM library.
+Data is automatically downloaded from elm.eu.org and can be updated programatically.
+
+To create an ELM::Library explicitly.
+
+    use ELM::Library;
+
+    my $lib = ELM::Library->new();
+    ...
+
+=head1 METHODS
+
+=head2 BUILD
+
+Load the ELM classes when we instantiate
+
+=cut
 sub BUILD($self, $args) {
     $self->load_elm_classes;
 }
 
-#Check to see if the library exists
+=head2 exists
+
+Check to see if the library exists
+
+=cut
 sub exists($self) {
     return -e $self->elm_lib_path;
 }
 
-#Load the cached ELM classes/instances data
+=head2 load_elm_classes
+
+Load the cached ELM classes/instances data
+
+=cut
 sub load_elm_classes($self) {
     if ($self->exists) {
         #Load the cached ELM classes/instances data
@@ -42,12 +78,16 @@ sub load_elm_classes($self) {
         $self->classes_version($classes_version);
         $self->instances_version($instances_version);
     } else {
-        say STDERR "Could not find an ELM library so auto-fetching a fresh one for the first time";
+        say STDERR "Could not find an ELM library at $self->elm_lib_path so auto-fetching a fresh one for the first time";
         $self->update;
     }
 }
 
-#Update the ELM definitions
+=head2 update
+
+Update the ELM definitions from elm.eu.org
+
+=cut
 sub update($self) {
     say STDERR "Updating ELM classes file " . $self->elm_lib_path;
     $self->_update_elm_classes();
@@ -115,5 +155,70 @@ sub _update_elm_instances($self) {
     say STDERR "Instances data updated to version $instances_version.";
     $self->instances_version($instances_version);
 }
+
+=head1 AUTHOR
+
+Matt Oates, C<< <mattoates at gmail.com> >>
+
+=head1 BUGS
+
+Please report any bugs or feature requests to C<mattoates@gmail.com>, or through
+GitHub issues at L<https://github.com/MattOates/melm/issues>.
+
+
+=head1 SUPPORT
+
+You can find documentation for this module with the perldoc command.
+
+    perldoc ELM
+
+
+You can also look for information at:
+
+=over 4
+
+=item * GitHub L<https://github.com/MattOates/melm>
+
+=back
+
+
+=head1 ACKNOWLEDGEMENTS
+
+Please make sure to cite the original ELM authors when using mELM results:
+    Holger Dinkel, Kim Van Roey, Sushama Michael, Norman E. Davey, 
+    Robert J. Weatheritt, Diana Born, Tobias Speck, Daniel Krüger, 
+    Gleb Grebnev, Marta Kubań, Marta Strumillo, Bora Uyar, 
+    Aidan Budd, Brigitte Altenberg, Markus Seiler, Lucía B. Chemes,
+    Juliana Glavina, Ignacio E. Sánchez, Francesca Diella, 
+    and Toby J. Gibson (2014)
+    The eukaryotic linear motif resource ELM: 10 years and counting
+    Nucl. Acids Res. 42(D1): D259-D266 
+    doi:10.1093/nar/gkt1047
+
+If you have used mELM with ANCHOR predictions please cite the following:
+    Bálint Mészáros, István Simon and Zsuzsanna Dosztányi (2009) 
+    Prediction of Protein Binding Regions in Disordered Proteins
+    PLoS Comput Biol 5(5): e1000376. 
+    doi:10.1371/journal.pcbi.1000376
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright 2016 Matt Oates.
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as
+    published by the Free Software Foundation, either version 3 of the
+    License, or (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+=cut
 
 1;

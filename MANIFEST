@@ -1,0 +1,19 @@
+.elm.dat
+bin/melm
+CHANGES.md
+ignore.txt
+lib/ELM.pm
+lib/ELM/AminoAcids.pm
+lib/ELM/Anchor.pm
+lib/ELM/Calc.pm
+lib/ELM/Library.pm
+lib/ELM/Utils.pm
+LICENSE
+Makefile.PL
+MANIFEST			This list of files
+README.md
+t/00-load.t
+t/01-library.t
+t/manifest.t
+t/pod-coverage.t
+t/pod.t

@@ -1,4 +1,4 @@
-package ELM::AminoAcids 0.1;
+package ELM::AminoAcids v1.4.1;
 
 use v5.20.0;
 use strict;
