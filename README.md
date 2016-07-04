@@ -1,9 +1,12 @@
-mELM version 1.4
-================
+mELM version 1.4.1
+==================
 
 mELM is a tool for masking or assigning Eukaryotic Linear Motifs to protein sequences. Both TSV/GFF3 output or FASTA is possible. 
 Essentially the tool is a CLI to the ELM.eu.org online resource with additional tools for dealing with short motif assignment within disordered regions.
 ANCHOR can be used to attempt to limit motif assignment to those found in disordered or MoRF regions.
+
+In v1.4.1 onwards mELM has moved to using a full class library and only fatpacking for release. This way the code is maintainable and reusable.
+If you wish to use ELM assignments in your own project you can now use the classes found in `lib/`.
 
 Please make sure to cite the original ELM authors when using mELM results:
 
@@ -23,8 +26,6 @@ If you have used mELM with ANCHOR predictions please cite the following:
        Prediction of Protein Binding Regions in Disordered Proteins
        PLoS Comput Biol 5(5): e1000376.
        doi:10.1371/journal.pcbi.1000376
-
-
 
 Usage
 =====
