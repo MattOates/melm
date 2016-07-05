@@ -165,8 +165,7 @@ sub mask($self,$sequence,$assignments,%opt) {
     $sequence;
 }
 
-sub _logic_filter_ok($self) {
-    my ($elm_name, $seq, %opt) = @_;
+sub _logic_filter_ok($self, $elm_name, $seq, %opt) {
     my %elms = %{ $self->library->elms };
     $opt{logic} //= 'FP'; #Default to removing only False Positives
     my %filters = map {$_->{seq} => undef} grep {$_->{logic} = $opt{logic}} @{$elms{$elm_name}{instances}};
