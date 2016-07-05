@@ -23,4 +23,5 @@
 ###2016-06-25
    * Huge refactor into split packages allowing more ELM based tools, releases now are fatpack
 
-
+###2016-07-05
+    * Majority of refactor complete
