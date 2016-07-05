@@ -165,7 +165,7 @@ use ELM::AminoAcids;
 use ELM::Anchor;
 
 #Current version of the script
-our $VERSION = "1.4.1";
+our $VERSION = "v1.4.1";
 
 #User options
 my $help;
@@ -213,9 +213,6 @@ GetOptions(
     "anchor-datapath|d=s" => \$anchor_datapath,
 ) or die "Fatal Error: Problem parsing command-line ".$!;
 
-#If we need anchor make sure it's there first
-check_anchor_installation() if ($morf_filter or $disorder_filter);
-
 my @fasta_files = @ARGV;
 
 #Print out some help if it was asked for or if no arguments were given.
@@ -224,7 +221,18 @@ pod2usage(-exitstatus => 0, -verbose => 2) if $help;
 pod2usage(-exitstatus => 0, -verbose => 1, -msg => "mELM version $VERSION by Matt Oates (C) 2014-2016. Please provide some sequence files to mask or assign ELM motifs to.") 
     unless $update or $upgrade or $list_classes or $list_instances or scalar @fasta_files >= 1;
 
-my $elm = ELM->new;
+my $elm = ELM->new(
+            type => $type,
+            max_class_expect => $max_class_expect,
+            min_elm_complexity => $min_elm_complexity,
+            morf_filter => $morf_filter,
+            disorder_filter => $disorder_filter,
+            logic_filter => $logic_filter,
+            num_elms_threshold => $num_elms
+);
+
+#If we need anchor make sure it's there first
+$elm->anchor->check_anchor_installation() if ($morf_filter or $disorder_filter);
 
 #Upgade the melm script to the latest version
 if ($upgrade) {
@@ -250,22 +258,18 @@ if ($upgrade) {
 
 #Update the ELM classes file and populate elms
 if ($update or not $elm->library->exists) {
-    update();
-}
-#Otherwise slurp in the cached %elms
-else {
-    load_elm_classes();
+    $elm->library->update();
 }
 
 #Dump out the ELM classes cache
 if ($list_classes) {
-    list_classes();
+    $elm->library->list_classes();
     exit;
 }
 
 #Dump out the ELM instances cache
 if ($list_instances) {
-    list_instances();
+    $elm->library->list_instances();
     exit;
 }
 

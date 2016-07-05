@@ -97,6 +97,36 @@ sub update($self) {
     close $elm_fh;
 }
 
+=head2 list_classes
+
+Print out all of the ELM classes in a simple TSV format
+
+=cut
+sub list_classes($self) {
+    my %elms = %{ $self->elms };
+    say "#Cached melm data for version $self->classes_version of the ELM classes library";
+    say "#" . join "\t", 'Accession', 'Type', 'Name', 'Description', 'Regex', 'Expectation';
+    foreach my $elm (keys %elms) {
+        say "$elms{$elm}{accession}\t$elms{$elm}{type}\t$elm\t$elms{$elm}{description}\t$elms{$elm}{regex}\t$elms{$elm}{probability}";
+    }
+}
+
+=head2 list_instances
+
+Print out all of the ELM instances in a simple TSV format
+
+=cut
+sub list_instances($self) {
+    my %elms = %{ $self->elms };
+    say "#Cached melm data for version $self->instances_version of the ELM instances library";
+    say "#" . join "\t", 'Accession', 'Name', 'Primary UniProt Accession', 'Start', 'End', 'Sequence', 'Assignment Logic';
+    foreach my $elm (keys %elms) {
+        foreach my $instance (@{$elms{$elm}{instances}}) {
+            say "$instance->{accession}\t$elm\t$instance->{id}\t$instance->{start}\t$instance->{end}\t$instance->{seq}\t$instance->{logic}";
+        }
+    }
+}
+
 #Refresh the cached ELM classes file and populate %elms with latest data
 sub _update_elm_classes($self) {
     my $classes_version;
@@ -170,7 +200,7 @@ GitHub issues at L<https://github.com/MattOates/melm/issues>.
 
 You can find documentation for this module with the perldoc command.
 
-    perldoc ELM
+    perldoc ELM::Library
 
 
 You can also look for information at:

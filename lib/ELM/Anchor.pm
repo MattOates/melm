@@ -1,4 +1,14 @@
 package ELM::Anchor v1.4.1;
+=encoding UTF-8
+=head1 NAME
+
+ELM::Anchor - Class to wrap ANCHOR and get assignments
+
+=head1 VERSION
+
+Version v1.4.1
+
+=cut
 
 use v5.20.0;
 use strict;
@@ -11,14 +21,36 @@ use IPC::Cmd qw/can_run run_forked/;
 
 use Class::Tiny { anchor_datapath => sub {can_run('anchor')} };
 
-#Test if ANCHOR is installed and get the directory where it's located assuming this is the datapath
+=head1 SYNOPSIS
+
+This class is responsible for executing and parsing output from ANCHOR
+
+To create an ELM::Anchor explicitly.
+
+    use ELM::Anchor;
+
+    my $anchor = ELM::Anchor->new();
+    $anchor->assign($seq);
+    ...
+
+=head1 METHODS
+
+=head2 check_anchor_installation
+
+Test if ANCHOR is installed and get the directory where it's located assuming this is the datapath
+
+=cut
 sub check_anchor_installation($self) {
     die "ANCHOR is not installed on this machine, you can get it from http://anchor.enzim.hu/" unless $self->anchor_datapath ;
     $self->anchor_datapath(dirname($self->anchor_datapath));
 }
 
-sub anchor($self) {
-    my ($sequence) = @_;
+=head2 assign
+
+Get anchor morf and disorder assignments for a sequence
+
+=cut
+sub assign($self,$sequence) {
 
     #Run ANCHOR
     my $results = run_forked( "anchor -d $self->anchor_datapath -v /dev/stdin", { child_stdin => ">test\n$sequence\n", timeout => 600} );
@@ -91,5 +123,70 @@ sub anchor($self) {
 
     return (\@anchor_ranges,\@anchor_probs,\@iupred_probs);
 }
+
+=head1 AUTHOR
+
+Matt Oates, C<< <mattoates at gmail.com> >>
+
+=head1 BUGS
+
+Please report any bugs or feature requests to C<mattoates@gmail.com>, or through
+GitHub issues at L<https://github.com/MattOates/melm/issues>.
+
+
+=head1 SUPPORT
+
+You can find documentation for this module with the perldoc command.
+
+    perldoc ELM::Anchor
+
+
+You can also look for information at:
+
+=over 4
+
+=item * GitHub L<https://github.com/MattOates/melm>
+
+=back
+
+
+=head1 ACKNOWLEDGEMENTS
+
+Please make sure to cite the original ELM authors when using mELM results:
+    Holger Dinkel, Kim Van Roey, Sushama Michael, Norman E. Davey, 
+    Robert J. Weatheritt, Diana Born, Tobias Speck, Daniel Krüger, 
+    Gleb Grebnev, Marta Kubań, Marta Strumillo, Bora Uyar, 
+    Aidan Budd, Brigitte Altenberg, Markus Seiler, Lucía B. Chemes,
+    Juliana Glavina, Ignacio E. Sánchez, Francesca Diella, 
+    and Toby J. Gibson (2014)
+    The eukaryotic linear motif resource ELM: 10 years and counting
+    Nucl. Acids Res. 42(D1): D259-D266 
+    doi:10.1093/nar/gkt1047
+
+If you have used mELM with ANCHOR predictions please cite the following:
+    Bálint Mészáros, István Simon and Zsuzsanna Dosztányi (2009) 
+    Prediction of Protein Binding Regions in Disordered Proteins
+    PLoS Comput Biol 5(5): e1000376. 
+    doi:10.1371/journal.pcbi.1000376
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright 2016 Matt Oates.
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as
+    published by the Free Software Foundation, either version 3 of the
+    License, or (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+=cut
 
 1;
