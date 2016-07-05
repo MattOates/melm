@@ -22,7 +22,13 @@ use ELM::Anchor;
 use ELM::AminoAcids;
 use ELM::Calc 'runencode';
 
-use Class::Tiny qw/num_elms_threshold type max_class_expect min_elm_complexity morf_filter disorder_filter logic_filter/, { 
+use Class::Tiny qw(
+    type max_class_expect
+    min_elm_complexity
+    morf_filter
+    disorder_filter
+    logic_filter), { 
+    num_elms_threshold => sub { 1 },
 	library => sub { ELM::Library->new() },
 	anchor => sub { ELM::Anchor->new() },
 };

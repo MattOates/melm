@@ -116,6 +116,9 @@ B<Matt Oates> - I<mattoates@gmail.com>
 
 =head1 EDIT HISTORY
 
+2016-07-05 - Matt Oates
+    * Majority of refactor complete
+
 2016-06-25 - Matt Oates
     * Huge refactor into split packages allowing more ELM based tools, releases now are fatpacks
 
@@ -180,7 +183,7 @@ my $max_class_expect;
 my $hard_mask;
 my $mask_motifs = 0;
 my $do_assignment;
-my $num_elms = 1;
+my $num_elms;
 my $min_elm_complexity;
 my $max_elm_probability;
 my $logic_filter;
@@ -228,7 +231,8 @@ my $elm = ELM->new(
             morf_filter => $morf_filter,
             disorder_filter => $disorder_filter,
             logic_filter => $logic_filter,
-            num_elms_threshold => $num_elms
+            num_elms_threshold => $num_elms,
+            anchor => ELM::Anchor->new(anchor_datapath => $anchor_datapath)
 );
 
 #If we need anchor make sure it's there first

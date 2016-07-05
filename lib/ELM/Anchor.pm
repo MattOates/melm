@@ -17,9 +17,13 @@ no warnings 'experimental::signatures';
 use feature 'signatures';
 
 use File::Basename;
-use IPC::Cmd qw/can_run run_forked/;
+use IPC::Cmd qw(
+    can_run
+    run_forked
+);
 
-use Class::Tiny { anchor_datapath => sub {can_run('anchor')} };
+use subs 'anchor_datapath';
+use Class::Tiny { anchor_datapath => sub {dirname(can_run('anchor'))} };
 
 =head1 SYNOPSIS
 
@@ -35,6 +39,26 @@ To create an ELM::Anchor explicitly.
 
 =head1 METHODS
 
+=head2 anchor_datapath
+
+Get/Set the ANCHOR datapath, default to install directory
+
+=cut
+sub anchor_datapath($self) {
+    my $defaults = Class::Tiny->get_all_attribute_defaults_for( ref $self );
+    if (@_) {
+        my $path = shift;
+        $path = $defaults->{anchor_datapath}->() unless $path;
+        return $self->{anchor_datapath} = $path;
+    }
+    elsif ( exists $self->{anchor_datapath} ) {
+        return $self->{anchor_datapath};
+    }
+    else {
+        return $self->{anchor_datapath} = $defaults->{anchor_datapath}->();
+    }
+}
+
 =head2 check_anchor_installation
 
 Test if ANCHOR is installed and get the directory where it's located assuming this is the datapath
@@ -42,7 +66,6 @@ Test if ANCHOR is installed and get the directory where it's located assuming th
 =cut
 sub check_anchor_installation($self) {
     die "ANCHOR is not installed on this machine, you can get it from http://anchor.enzim.hu/" unless $self->anchor_datapath ;
-    $self->anchor_datapath(dirname($self->anchor_datapath));
 }
 
 =head2 assign

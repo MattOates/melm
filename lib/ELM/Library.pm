@@ -24,10 +24,11 @@ use Data::Dumper;
 #Make eval of dump simpler
 $Data::Dumper::Terse=1;
 
-use Class::Tiny qw/elms classes_version instances_version/, { 
-    elm_lib_path => sub {
-        $ENV{HOME} . '/.elm.dat';
-    }
+use Class::Tiny qw(
+    elms
+    classes_version
+    instances_version),{ 
+    elm_lib_path => sub { $ENV{HOME} . '/.elm.dat' }
 };
 
 =head1 SYNOPSIS
