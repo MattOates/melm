@@ -227,6 +227,7 @@ my $elm = ELM->new(
             type => $type,
             max_class_expect => $max_class_expect,
             min_elm_complexity => $min_elm_complexity,
+            max_elm_probability => $max_elm_probability,
             morf_filter => $morf_filter,
             disorder_filter => $disorder_filter,
             logic_filter => $logic_filter,
@@ -294,12 +295,7 @@ foreach my $file (@fasta_files) {
     while (my $seq = $seqin->next_seq) {
 
         #over the whole ELM library assign
-        my @assignment = assign_all_elms($seq, 
-                                        type => $type,
-                                        max_class_expect => $max_class_expect,
-                                        morf_filter => $morf_filter,
-                                        disorder_filter => $disorder_filter
-                                    );
+        my @assignment = $elm->assign_all_elms($seq->seq);
 
         if ($do_assignment) {
             foreach my $assignment (@assignment) {
@@ -314,7 +310,7 @@ foreach my $file (@fasta_files) {
                 }
             }
         } else {
-            $seq->seq(mask($seq->seq, collapse_assignment($seq->seq, \@assignment, invert => !$mask_motifs), hard_mask => $hard_mask));
+            $seq->seq($elm->mask($seq->seq, $elm->collapse_assignment($seq->seq, \@assignment, invert => !$mask_motifs), hard_mask => $hard_mask));
             $seqout->write_seq($seq);
         }
     }

@@ -19,12 +19,14 @@ use feature 'signatures';
 use ELM::Library;
 use ELM::Utils;
 use ELM::Anchor;
-use ELM::AminoAcids;
+use ELM::AminoAcids 'score';
 use ELM::Calc 'runencode';
 
 use Class::Tiny qw(
-    type max_class_expect
+    type 
+    max_class_expect
     min_elm_complexity
+    max_elm_probability
     morf_filter
     disorder_filter
     logic_filter), { 
@@ -49,8 +51,8 @@ This class is responsible for all high level analysis that can be performed with
 Assign a single ELM class to a given sequence
 
 =cut
-sub assign_elm($self, $elm, $seq, %opt) {
-	my $anchor = $opt{morf_filter} || $opt{disorder_filter};
+sub assign_elm($self, $elm, $seq) {
+	my $anchor = $self->morf_filter || $self->disorder_filter;
 
 	#Handle any disorder/morf prediction
 	my ($morf_regions, $dis_regions, $iupred);
@@ -59,7 +61,7 @@ sub assign_elm($self, $elm, $seq, %opt) {
         $dis_regions = runencode($iupred);
     }
 
-    return $self->assign($elm, $self->library->elms->{$elm}{regex}, $seq->seq, $morf_regions, $dis_regions);
+    return $self->assign($elm, $self->library->elms->{$elm}{regex}, $seq, $morf_regions, $dis_regions);
 }
 
 =head2 assign_all_elms
@@ -67,24 +69,22 @@ sub assign_elm($self, $elm, $seq, %opt) {
 Assign all ELM classes given filter options to a sequence
 
 =cut
-sub assign_all_elms($self, $seq, %opt) {
-	my $max_class_expect = $opt{max_class_expect};
-	my $type = $opt{type};
+sub assign_all_elms($self, $seq) {
 
 	my @assignment;
     foreach my $elm (keys $self->library->elms->%*) {
 
     	#Ignore those ELM classes that are below the user defined probability threshold
-		if ($max_class_expect) {
-		    next if $self->library->elms->{$elm}{probability} >= $max_class_expect;
+		if ($self->max_class_expect) {
+		    next if $self->library->elms->{$elm}{probability} >= $self->max_class_expect;
 		}
 
 		#Ignore all the ELM classes but the type requested
-		if ($type) {
-		    next if $self->library->elms->{$elm}{type} ne $type;
+		if ($self->type) {
+		    next if $self->library->elms->{$elm}{type} ne $self->type;
 		}
 
-        push @assignment, assign_elm($elm, $seq->seq, %opt);
+        push @assignment, $self->assign_elm($elm, $seq);
     }
 
     return @assignment;

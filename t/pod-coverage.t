@@ -26,6 +26,7 @@ pod_coverage_ok('ELM', {trustme => [
 				    qr/type/,
 				    qr/max_class_expect/,
 				    qr/min_elm_complexity/,
+				    qr/max_elm_probability/,
 				    qr/morf_filter/,
 				    qr/disorder_filter/,
 				    qr/logic_filter/,

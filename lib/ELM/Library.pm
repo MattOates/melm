@@ -132,7 +132,7 @@ sub list_instances($self) {
 sub _update_elm_classes($self) {
     my $classes_version;
     $self->elms({}); #Wipe out existing elms
-    my $class_tsv = get_www('http://elm.eu.org/elms/elms_index.tsv?q=*');
+    my $class_tsv = get_www('http://elm.eu.org/elms/elms_index.tsv');
     #Each record looks like:
     #Pre 1.4
     #Accession  ELMIdentifier   Description Regex   Probability #Instances  #Instances_in_PDB
