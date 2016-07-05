@@ -79,7 +79,7 @@ sub load_elm_classes($self) {
         $self->classes_version($classes_version);
         $self->instances_version($instances_version);
     } else {
-        say STDERR "Could not find an ELM library at $self->elm_lib_path so auto-fetching a fresh one for the first time";
+        say STDERR "Could not find an ELM library at " . $self->elm_lib_path . " so auto-fetching a fresh one for the first time";
         $self->update;
     }
 }
@@ -132,7 +132,7 @@ sub list_instances($self) {
 sub _update_elm_classes($self) {
     my $classes_version;
     $self->elms({}); #Wipe out existing elms
-    my $class_tsv = get_www('http://elm.eu.org/elms/elms_index.tsv');
+    my $class_tsv = get_www('http://elm.eu.org/elms/elms_index.tsv?q=*');
     #Each record looks like:
     #Pre 1.4
     #Accession  ELMIdentifier   Description Regex   Probability #Instances  #Instances_in_PDB
@@ -154,7 +154,7 @@ sub _update_elm_classes($self) {
 #Get the sequence for an instance from ELM
 sub _get_instance_seqs($self) {
     say STDERR "Downloading instance protein sequences from ELM.";
-    my $fasta = get_www("http://elm.eu.org/instances.fasta");
+    my $fasta = get_www("http://elm.eu.org/instances.fasta?q=*");
     my %sequences;
     #Hard assumption, ELM gives out sequences as a single line (appears true)
     foreach my $record (split />/, $fasta) {
@@ -170,7 +170,7 @@ sub _get_instance_seqs($self) {
 sub _update_elm_instances($self) {
     my $instances_version;
     my %instance_logic = ('false positive' => 'FP','true negative' => 'TN','true positive', => 'TP', 'unknown' => 'U');
-    my $instances_tsv = get_www('http://elm.eu.org/instances.tsv');
+    my $instances_tsv = get_www('http://elm.eu.org/instances.tsv?q=*&taxon=&instance_logic=');
     my %uniprot_sequences = $self->_get_instance_seqs();
     #Each record looks like:
     #Accession, ELMType, ELMIdentifier, ProteinName, Primary_Acc, Accessions, Start, End, References, Methods, InstanceLogic, PDB, Organism

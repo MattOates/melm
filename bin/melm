@@ -163,9 +163,8 @@ use Pod::Usage;
 
 #Non Core Deps
 use Bio::SeqIO;
+use ELM;
 use ELM::Utils 'get_www';
-use ELM::AminoAcids;
-use ELM::Anchor;
 
 #Current version of the script
 our $VERSION = "v1.4.1";
