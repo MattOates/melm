@@ -20,3 +20,8 @@
 ###2016-05-23
    * Removed bitrot due to changes at ELM.eu.org and enabled support for v1.4 of ELM
 
+###2016-06-25
+   * Huge refactor into split packages allowing more ELM based tools, releases now are fatpack
+
+###2016-07-05
+    * Majority of refactor complete

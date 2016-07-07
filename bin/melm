@@ -116,28 +116,33 @@ B<Matt Oates> - I<mattoates@gmail.com>
 
 =head1 EDIT HISTORY
 
+2016-07-05 - Matt Oates
+    * Majority of refactor complete
 
-2014-08-30 - Matt Oates
-    * First features added.
+2016-06-25 - Matt Oates
+    * Huge refactor into split packages allowing more ELM based tools, releases now are fatpacks
 
-2014-09-05 - Matt Oates
-    * Masking with only specific ELM classes included based on expect value and motif type
+2016-05-23 - Matt Oates
+    * Removed bitrot due to changes at ELM.eu.org and enabled support for v1.4 of ELM
 
-2014-09-08 - Matt Oates
-    * ELM instance downloading
-    * False Positive logic filtering based on ELM instances library.
-    * GFF3 and assignment output
+2014-09-10
+    * Allowed for the script to upgrade itself from GitHub and made it a bit more friendly to use
 
 2014-09-09 - Matt Oates
     * Integrated ANCHOR predictions if this is installed on the system (independent of OS)
     * Limit motif assignment to predicted binding regions (MoRF) 
     * Limit motif assignment to predicted disordered regions
 
-2014-09-10
-    * Allowed for the script to upgrade itself from GitHub and made it a bit more friendly to use
+2014-09-08 - Matt Oates
+    * ELM instance downloading
+    * False Positive logic filtering based on ELM instances library.
+    * GFF3 and assignment output
 
-2016-05-23 - Matt Oates
-    * Removed bitrot due to changes at ELM.eu.org and enabled support for v1.4 of ELM
+2014-09-05 - Matt Oates
+    * Masking with only specific ELM classes included based on expect value and motif type
+
+2014-08-30 - Matt Oates
+    * First features added.
 
 =head1 TODO
 
@@ -152,56 +157,17 @@ use autodie;
 use feature 'say';
 
 #Core Deps
-use File::Basename;
-use Cwd qw/abs_path/;
-use IPC::Cmd qw/can_run run_forked/;
 use List::Util qw/min max sum/;
 use Getopt::Long;
 use Pod::Usage;
-use Data::Dumper;
-#Make eval of dump simpler
-$Data::Dumper::Terse=1;
 
 #Non Core Deps
 use Bio::SeqIO;
+use ELM;
+use ELM::Utils 'get_www';
 
 #Current version of the script
-our $VERSION = "1.4";
-
-#Globals
-my %elms; #The ELM classes to be used, either retreived from a cached file or populated from the web
-
-
-#Amino acids probabilities used for expect scoring, calculated from looking at all eukaryotic sequences in the SUPERFAMILY database.
-my %amino_probs = ('A' => 0.074253,
-                'C' => 0.009697,
-                'D' => 0.050147,
-                'E' => 0.089011,
-                'F' => 0.018359,
-                'G' => 0.073955,
-                'H' => 0.025784,
-                'I' => 0.026977,
-                'K' => 0.061170,
-                'L' => 0.073093,
-                'M' => 0.019150,
-                'N' => 0.033851,
-                'P' => 0.094297,
-                'Q' => 0.056396,
-                'R' => 0.063802,
-                'S' => 0.104119,
-                'T' => 0.059547,
-                'V' => 0.045399,
-                'W' => 0.006850,
-                'Y' => 0.014141);
-
-#Ambiguous amino acids are just as expected as the combination they represent
-$amino_probs{B} = $amino_probs{N} + $amino_probs{D};
-$amino_probs{Z} = $amino_probs{E} + $amino_probs{Q};
-$amino_probs{J} = $amino_probs{I} + $amino_probs{L};
-
-#Probability of an amino acid given an amino acid, maximum confusion minimum self information
-$amino_probs{X} = 1.0;
-
+our $VERSION = "v1.4.1";
 
 #User options
 my $help;
@@ -216,7 +182,7 @@ my $max_class_expect;
 my $hard_mask;
 my $mask_motifs = 0;
 my $do_assignment;
-my $num_elms = 1;
+my $num_elms;
 my $min_elm_complexity;
 my $max_elm_probability;
 my $logic_filter;
@@ -249,9 +215,6 @@ GetOptions(
     "anchor-datapath|d=s" => \$anchor_datapath,
 ) or die "Fatal Error: Problem parsing command-line ".$!;
 
-#If we need anchor make sure it's there first
-check_anchor_installation() if ($morf_filter or $disorder_filter);
-
 my @fasta_files = @ARGV;
 
 #Print out some help if it was asked for or if no arguments were given.
@@ -260,410 +223,58 @@ pod2usage(-exitstatus => 0, -verbose => 2) if $help;
 pod2usage(-exitstatus => 0, -verbose => 1, -msg => "mELM version $VERSION by Matt Oates (C) 2014-2016. Please provide some sequence files to mask or assign ELM motifs to.") 
     unless $update or $upgrade or $list_classes or $list_instances or scalar @fasta_files >= 1;
 
-#Test if ANCHOR is installed and get the directory where it's located assuming this is the datapath
-sub check_anchor_installation {
-    $anchor_datapath = can_run('anchor') or die "ANCHOR is not installed on this machine, you can get it from http://anchor.enzim.hu/";
-    $anchor_datapath = dirname($anchor_datapath);
-}
+my $elm = ELM->new(
+            type => $type,
+            max_class_expect => $max_class_expect,
+            min_elm_complexity => $min_elm_complexity,
+            max_elm_probability => $max_elm_probability,
+            morf_filter => $morf_filter,
+            disorder_filter => $disorder_filter,
+            logic_filter => $logic_filter,
+            num_elms_threshold => $num_elms,
+            anchor => ELM::Anchor->new(anchor_datapath => $anchor_datapath)
+);
 
-sub anchor {
-    my ($sequence) = @_;
-
-    #Run ANCHOR
-    my $results = run_forked( "anchor -d $anchor_datapath -v /dev/stdin", { child_stdin => ">test\n$sequence\n", timeout => 600} );
-    my @lines = split /\n/, $results->{stdout};
-
-    #Return values
-    my @iupred_probs = ();
-    my @anchor_probs = ();
-    my @anchor_ranges = ();
-
-    #   Columns:
-    #   1 - Amino acid number
-    #   2 - One letter code
-    #   3 - ANCHOR probability value
-    #   4 - ANCHOR output
-    #   5 - IUPred probability value
-    #   6 - ANCHOR score 
-    #   7 - S 
-    #   8 - Eint 
-    #   9 - Egain
-
-    my $line = shift @lines;
-    my $nextline;
-    while ($line) {
-        
-        #Look a single line ahead to work out when we are at the end of a record
-        $nextline = shift @lines;
-
-        #If we are at the start of the file get the binding regions
-        if ($line =~ /^# ANCHOR/) {
-            #Then skip to the Predicted binding regions table
-            while ($line !~ /^# Predicted binding regions/) { $line = $nextline; $nextline = shift @lines; }
-            $line = $nextline;
-            $nextline = shift @lines;
-            #If we have some predicted binding sites add them to the list
-            if ($line !~ /none/i) {
-                while ($line !~ /^#$/) {
-                    $line = $nextline;
-                    $nextline = shift @lines;
-                    last if $line =~ /^#$/;
-                    $line =~ s/^#\s+//;
-                    my (undef, $start, $end) = split /\s+/, $line;
-                    push @anchor_ranges, [$start,$end];
-                }
-            }
-        }
-
-        #Ignore blank lines
-        if ($line eq '') {
-            $line = $nextline;
-            next;
-        }
-
-        #If a line doesn't start with a hash assume it's model output
-        if ($line !~ /^#/) {
-            $line =~ s/^\s+//; #Trim any leading white space
-            #Only bother to store the probability columns for this protein
-            my (undef,undef,$anchor_prob,undef,$iupred_prob) = split /\s+/, $line;
-            #Push these onto the list
-            $anchor_prob =~ s/\s//g;
-            $anchor_prob =~ s/0+$//g;
-            $iupred_prob =~ s/\s//g;
-            $iupred_prob =~ s/0+$//g;
-            push @anchor_probs, $anchor_prob;
-            push @iupred_probs, $iupred_prob;
-        }
-
-        $line = $nextline;
-    }
-
-    return (\@anchor_ranges,\@anchor_probs,\@iupred_probs);
-}
-
-#Efficiently calculate the coverage between two number line segments
-sub coverage {
-    my ($a,$b,$x,$y) = @_;
-    return max(min((1+$b-$a),(1+$y-$x),(1+abs($b-$a)+abs($y-$x))-(max($a,$b,$x,$y)-min($a,$b,$x,$y))),0);
-}
-
-#Report if there is any overlap between a single defined region and a set of regions
-sub any_overlap {
-    my ($start,$end,$pairs) = @_;
-    foreach my $pair (@$pairs) {
-        return 1 if coverage($start,$end,$pair->[0],$pair->[1]);
-    }
-    return 0;
-}
-
-#Take an arrayref of numbers or a delimited string and returns a list of start-end pairs for runs of values above a threshold
-sub runencode {
-        my ($probs,%opts) = @_;
-        unless (defined $probs) {
-            warn "undef passed to runencode!";
-            return;
-        }
-
-        #Some default optional parameters
-        $opts{delimiter} //= ','; 
-        $opts{threshold} //= 0.5;
-        $opts{cmp} //= sub {$_[0] >= $_[1]};
-
-        #If a string was passed split it into values
-        $probs = [split /$opts{delimiter}/, $probs] if (ref $probs ne 'ARRAY');
-        my @ranges = ();
-        my $index = 1;
-        my $start = undef;
-        my $end = undef;
-
-        foreach my $prob (@$probs) {
-                if ($opts{cmp}->($prob, $opts{threshold})) {
-                        $start = $index unless defined $start;
-                } else {
-                        $end = $index-1;
-                        push @ranges, [$start, $end] if defined $start;
-                        $start = undef;
-                }
-                $index++;
-        }
-
-        #Deal with the edge case where there is a region at the end of the sequence
-        if ($probs->[-1] >= 0.5) {
-                        $end = $index-1;
-                        push @ranges, [$start, $end] if defined $start;
-        }
-
-        return \@ranges;
-}
-
-sub amino_prob {
-    my ($amino) = @_;
-    if (exists $amino_probs{$amino}) {
-        return $amino_probs{$amino};
-    } else {
-        warn "Amino acid not found: $amino";
-        #Magic number, aa character is almost 0 probability, this should perhaps be 1.0 to ignore weird characters
-        return 4.94065645841247e-324; 
-    }
-}
-
-sub logic_filter_ok {
-    my ($elm_name, $seq, %opt) = @_;
-    $opt{logic} //= 'FP'; #Default to removing only False Positives
-    my %filters = map {$_->{seq} => undef} grep {$_->{logic} = $opt{logic}} @{$elms{$elm_name}{instances}};
-    return (not exists $filters{$seq})?1:0;
-}
-
-sub score {
-    my ($sequence) = @_;
-    #my @aminos = unpack 'C*', $sequence;
-    warn "Sequence was empty" and return (0.0,0.0) if $sequence eq '';
-    my @aminos = split //, $sequence;
-    my $a = shift(@aminos);
-    while ($a eq 'U' or $a eq 'O') { $a = shift(@aminos); }
-    my $prob = amino_prob($a);
-    my $log = log(2.0);
-    my $entropy = $prob * (log(1/$prob)/$log);
-    #$prob *= amino_prob($_) for @aminos;
-    foreach my $amino (@aminos) {
-        if ( (uc $amino eq 'U') or (uc $amino eq 'O') ) { next; }
-        $prob *= amino_prob($amino);
-        $entropy += amino_prob($amino) * (log(1.0/amino_prob($amino))/$log);
-    }
-    
-    return ($prob,$entropy,$entropy / length $sequence);
-}
-
-#Take a regular expression and return all of the ([start,end,substr]...) matched results
-sub assign {
-    my ($elm_name, $regex, $string, $morf_regions, $dis_regions) = @_;
-    my @ret;
-    my ($start,$end,$seq,$prob,$entropy,$entrorate);
-    while ($string =~ /($regex)/g) {
-        ($start,$end,$seq) = ($-[0]+1, $+[0], $&);
-        if ($logic_filter) {
-            next unless logic_filter_ok($elm_name,$seq,logic => $logic_filter);
-        }
-        ($prob, $entropy, $entrorate) = score($seq);
-        if ($max_elm_probability) {
-            next if $prob > $max_elm_probability;
-        }
-        if ($min_elm_complexity) {
-            next if $entrorate < $min_elm_complexity;
-        }
-        if ($morf_filter) {
-            next unless any_overlap($start,$end,$morf_regions);
-        }
-        if ($disorder_filter) {
-            next unless any_overlap($start,$end,$dis_regions);
-        }
-        push @ret, [$elm_name, $start, $end, $seq, $prob, $entropy, $entrorate];
-    }
-    if (@ret < 1) {
-        return;
-    } else {
-        return \@ret;
-    }
-}
-
-#Collapse multiple assignments into a single list of disjoint ([start,end]...) and per residue counts of collapsed data
-sub collapse_assignment {
-    my ($sequence,$assignments,%opt) = @_;
-
-    #Create a list of assignment counts per residue
-    my @ass = (0) x length $sequence;
-    foreach my $motif (map {@$_} @$assignments) {
-        $ass[$_-1]++ for $motif->[1]..$motif->[2];
-    }
-
-    #Invert the assignment counts, i.e. mark everything that wasn't asigned as being assigned
-    #so [5,3,2,1,1,1,2,0,0,3] becomes [0,0,0,0,0,0,0,1,1,0]
-    if ($opt{invert}) {
-        $_ = abs +($_ >= 1) - 1 for @ass;
-    }
-
-    #Runlength encode the assignment flags to get paired assignments again
-    #return (\runencode(\@ass), \@ass);
-    return runencode(\@ass, threshold => $num_elms);
-}
-
-#Mask a string hard/soft based on a list of start,end pairs [[start,end],...]
-sub mask {
-    my ($sequence,$assignments,%opt) = @_;
-    foreach my $assignment (@$assignments) {
-        if ($opt{hard_mask}) {
-            substr($sequence,$assignment->[0]-1,1+$assignment->[1]-$assignment->[0]) = 'x' x (1+$assignment->[1]-$assignment->[0]);  
-        } else {
-            substr($sequence,$assignment->[0]-1,1+$assignment->[1]-$assignment->[0]) = lc substr($sequence,$assignment->[0]-1,1+$assignment->[1]-$assignment->[0]);  
-        }
-    }
-    $sequence;
-}
-
-#Get a webpage as a string
-sub get_www {
-    my ($url) = @_;
-
-    use LWP::UserAgent;
-    #Decided to localise this and just handle checking for deps properly
-    my $ua = LWP::UserAgent->new;
-
-    my $response = $ua->get($url);
-    if ($response->is_success) {
-       return $response->decoded_content;
-    } else {
-        die "Failed whilst contacting $url: " . $response->status_line;
-    }
-}
-
-#Refresh the cached ELM classes file and populate %elms with latest data
-sub update_elm_classes {
-    my $class_tsv = get_www('http://elm.eu.org/elms/elms_index.tsv');
-    #Each record looks like:
-    #Pre 1.4
-    #Accession  ELMIdentifier   Description Regex   Probability #Instances  #Instances_in_PDB
-    #Post 1.4
-    #Accession ELMIdentifier FunctionalSiteName Description Regex Probability #Instances #Instances_in_PDB
-    #ELME000080"    "TRG_PEX_1" "Wxxx[FY] motifs present in N-terminal half of Pex5 bind to Pex13 and Pex14 at peroxisomal and glycosomal membranes to facilitate entrance of PTS1 cargo proteins into the organellar lumen. =>"W...[FY] =>"0.000222625 =>"27"  "1"
-    foreach my $record (split /\n/, $class_tsv) {
-        (undef,$classes_version) = split /: /, $record if ($record =~ /^#ELM_Classes_Download_Version/);
-        next if $record =~ /^(#|"Accession)/; #Ignore the header
-        $record =~ s/"//g;
-        my ($elm_id,$elm_name,$name,$description,$regex,$probability,$instances,$instances_in_pdb) = split /\t/, $record;
-        my ($type) = split /_/, $elm_name;
-        $elms{$elm_name} = {accession => $elm_id, elm_name => $elm_name, site => $name, type => $type, description => $description, regex => $regex, probability => $probability};
-    }
-    open my $elm_fh,'>',"$ENV{HOME}/.elm.dat";
-    say $elm_fh Dumper([$classes_version,$instances_version,\%elms]);
-    close $elm_fh;
-    say STDERR "Updated ELM library to version $classes_version" if $verbose;
-}
-
-#Get the sequence for an instance from ELM
-sub get_instance_seqs {
-    say STDERR "Downloading instance protein sequences from ELM." if $verbose;
-    my $fasta = get_www("http://elm.eu.org/instances.fasta");
-    my %sequences;
-    #Hard assumption, ELM gives out sequences as a single line (appears true)
-    foreach my $record (split />/, $fasta) {
-        next if $record =~ /^\s*$/;
-        my ($id,$seq) = split /\n/, $record;
-        my (undef, $up_id) = split /\|/, $id;
-        $sequences{$up_id} = $seq;
-    }
-    return %sequences;
-}
-
-#Upgrade the melm script to the latest version
-sub upgrade {
-    if (eval { require LWP::Protocol::https }) {
-        say STDERR "Upgrading melm version $VERSION to latest from GitHub.";
-        my $melm_path = abs_path(__FILE__);
-        say STDERR "Getting latest melm script from GitHub." if $verbose;
-        my $melm = get_www('https://raw.githubusercontent.com/MattOates/melm/master/bin/melm');
-        say STDERR "Upgrading your copy of melm to latest version." if $verbose;
-        open my $melm_fh, '>', $melm_path or die "Could not open melm script for writing.";
-        binmode($melm_fh, ':utf8');
-        print $melm_fh $melm;
-        close $melm_fh or die "Could not close melm script.";
-        `$melm_path --verbose --update`;
-    } else {
-        say STDERR 'Sorry GitHub requires HTTPS support and your Perl does not have LWP::Protocol::https installed.';
-        say STDERR 'Try `cpanm -i LWP::Protocol::https` to install this module.';
-        exit 1;
-    }
-}
-
-#Refresh the cached ELM instances data
-sub update_elm_instances {
-    my %instance_logic = ('false positive' => 'FP','true negative' => 'TN','true positive', => 'TP', 'unknown' => 'U');
-    my $instances_tsv = get_www('http://elm.eu.org/instances.tsv');
-    my %uniprot_sequences = get_instance_seqs();
-    #Each record looks like:
-    #Accession, ELMType, ELMIdentifier, ProteinName, Primary_Acc, Accessions, Start, End, References, Methods, InstanceLogic, PDB, Organism
-    #"ELMI000471"   "LIG"   "LIG_SH2_SRC"   "SRC_HUMAN" "P12931"    "P12931 E1P5V4 Q76P87 Q86VB9 Q9H5A8"    "530"   "533"   "10360179"  "x-ray crystallography" "true positive" ""  "Homo sapiens"
-    foreach my $record (split /\n/, $instances_tsv) {
-        (undef,$instances_version) = split /: /, $record if ($record =~ /^#ELM_Instance_Download_Version/);
-        next if $record =~ /^(#|"Accession)/; #Ignore the header
-        $record =~ s/"//g;
-        my ($elm_id, $type, $elm_name, $protein_name, $up_id, $alt_up_id, $start, $end, $references, $methods, $logic, $pdb, $organism) = split /\t/, $record;
-        my $seq = substr( $uniprot_sequences{$up_id}, $start-1, 1+$end-$start );
-        push @{$elms{$elm_name}{instances}}, {accession => $elm_id, id => $up_id, start => $start, end => $end, logic => $instance_logic{$logic}, seq => $seq};
-    }
-    say STDERR "Instances data updated to version $instances_version." if $verbose;
-    open my $elm_fh,'>',"$ENV{HOME}/.elm.dat";
-    say $elm_fh Dumper([$classes_version,$instances_version,\%elms]);
-    close $elm_fh;
-}
-
-#Load the cached ELM classes/instances data
-sub load_elm_classes {
-    local $/; #slurp
-    open my $elm_fh, '<', "$ENV{HOME}/.elm.dat";
-    my $classes;
-    ($classes_version, $instances_version, $classes) =  @{ eval <$elm_fh> };
-    %elms = %$classes;
-    close $elm_fh;
-    say STDERR "Using ELM class library version $classes_version and instances version $instances_version, you can update this with `melm --update`" if $verbose;
-}
+#If we need anchor make sure it's there first
+$elm->anchor->check_anchor_installation() if ($morf_filter or $disorder_filter);
 
 #Upgade the melm script to the latest version
 if ($upgrade) {
-    upgrade();
+    #Upgrade the melm script to the latest version
+    #TODO refactor this to get the latest release fatpack bundle!
+    #i.e. for $tag=v1.4.0 get https://github.com/MattOates/melm/releases/download/$tag/melm
+    #TODO this has unsafe overwrite without backup of old file, change this!
+
+    say STDERR "Upgrading melm version to latest from GitHub.";
+    my $melm_path = abs_path(__FILE__);
+    say STDERR "Getting latest melm script from GitHub.";
+    my $melm = get_www('https://raw.githubusercontent.com/MattOates/melm/master/bin/melm');
+    say STDERR "Upgrading your copy of melm to latest version.";
+    open my $melm_fh, '>', $melm_path or die "Could not open melm script for writing.";
+    binmode($melm_fh, ':encoding(utf8)');
+    print $melm_fh $melm;
+    close $melm_fh or die "Could not close melm script.";
+    `$melm_path --verbose --update`;
+
     say STDERR "Done!";
     exit;
 }
 
-#Update the ELM classes file and populate %elms
-if ($update or not -e "$ENV{HOME}/.elm.dat") {
-    if (eval { require LWP::UserAgent }) {
-        say STDERR "Updating ELM classes file $ENV{HOME}/.elm.dat" if $verbose;
-        update_elm_classes();
-        update_elm_instances();
-    } else {
-        say STDERR "On first execution and when updating melm requires your Perl installation to have LWP::UserAgent to contact ELM servers for data.";
-        say STDERR "You might be able to install this module using `cpanm -i LWP::UserAgent`.";
-        say STDERR "Another alternative is to download the latest ELM data from the melm repository at: https://raw.githubusercontent.com/MattOates/melm/master/.elm.dat";
-        say STDERR "Place the .elm.dat file into your home directory: /Users/username (OSX), /home/username (Linux) or C:\\Users\\username (Windows)"
-    }
-}
-#Otherwise slurp in the cached %elms
-else {
-    load_elm_classes();
+#Update the ELM classes file and populate elms
+if ($update or not $elm->library->exists) {
+    $elm->library->update();
 }
 
 #Dump out the ELM classes cache
 if ($list_classes) {
-    say "#Cached melm data for version $classes_version of the ELM classes library";
-    say "#" . join "\t", 'Accession', 'Type', 'Name', 'Description', 'Regex', 'Expectation';
-    foreach my $elm (keys %elms) {
-        say "$elms{$elm}{accession}\t$elms{$elm}{type}\t$elm\t$elms{$elm}{description}\t$elms{$elm}{regex}\t$elms{$elm}{probability}";
-    }
+    $elm->library->list_classes();
     exit;
 }
 
 #Dump out the ELM instances cache
 if ($list_instances) {
-    say "#Cached melm data for version $instances_version of the ELM instances library";
-    say "#" . join "\t", 'Accession', 'Name', 'Primary UniProt Accession', 'Start', 'End', 'Sequence', 'Assignment Logic';
-    foreach my $elm (keys %elms) {
-        foreach my $instance (@{$elms{$elm}{instances}}) {
-            say "$instance->{accession}\t$elm\t$instance->{id}\t$instance->{start}\t$instance->{end}\t$instance->{seq}\t$instance->{logic}";
-        }
-    }
+    $elm->library->list_instances();
     exit;
-}
-
-#Remove those ELM classes that are below the user defined probability threshold
-if ($max_class_expect) {
-    say STDERR "Removing ELM classes with a probability greater than $max_class_expect" if $verbose;
-    delete $elms{ $_ } for grep { $elms{$_}{probability} >= $max_class_expect } keys %elms;
-}
-
-#Remove all the ELM classes but the type requested
-if ($type) {
-    say STDERR "Only using ELM classes of type $type" if $verbose;
-    delete $elms{ $_ } for grep { $elms{$_}{type} ne $type } keys %elms;
 }
 
 #If we are outputting full assignment setup a header
@@ -683,25 +294,15 @@ foreach my $file (@fasta_files) {
     #For each sequence do ELM assignment
     while (my $seq = $seqin->next_seq) {
 
-        #Handle any disorder/morf prediction
-        my ($morf_regions, $dis_regions, $anchor, $iupred);
-        if ($morf_filter or $disorder_filter) {
-            ($morf_regions, $anchor, $iupred) = anchor($seq->seq);
-            $dis_regions = runencode($iupred);
-            print Dumper ($morf_regions,$dis_regions);
-        }
+        #over the whole ELM library assign
+        my @assignment = $elm->assign_all_elms($seq->seq);
 
-        #over the whole library
-        my @assignment;
-        foreach my $elm (keys %elms) {
-            push @assignment, assign($elm,$elms{$elm}{regex}, $seq->seq, $morf_regions, $dis_regions);
-        }
         if ($do_assignment) {
             foreach my $assignment (@assignment) {
                 #sequence_motif
                 if ($gff) {
                     foreach my $ass (@$assignment) {
-                        say $seq->id . "\tmELM\tsequence_motif\t$ass->[1]\t$ass->[2]\t$ass->[4]\t.\t.\tID=$gff_id;Name=$ass->[0];Alias=$elms{$ass->[0]}{accession}";
+                        say $seq->id . "\tmELM\tsequence_motif\t$ass->[1]\t$ass->[2]\t$ass->[4]\t.\t.\tID=$gff_id;Name=$ass->[0];Alias=$elm->library->elms{$ass->[0]}{accession}";
                         $gff_id++;
                     }
                 } else {
@@ -709,7 +310,7 @@ foreach my $file (@fasta_files) {
                 }
             }
         } else {
-            $seq->seq(mask($seq->seq, collapse_assignment($seq->seq, \@assignment, invert => !$mask_motifs), hard_mask => $hard_mask));
+            $seq->seq($elm->mask($seq->seq, $elm->collapse_assignment($seq->seq, \@assignment, invert => !$mask_motifs), hard_mask => $hard_mask));
             $seqout->write_seq($seq);
         }
     }
