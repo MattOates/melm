@@ -1,4 +1,4 @@
-mELM version 1.4.1
+mELM version 1.4.1 [![Build Status](https://travis-ci.org/MattOates/melm.svg?branch=class_refactor)](https://travis-ci.org/MattOates/melm)[![Coverage Status](https://coveralls.io/repos/github/MattOates/melm/badge.svg?branch=class_refactor)](https://coveralls.io/github/MattOates/melm?branch=class_refactor)
 ==================
 
 mELM is a tool for masking or assigning Eukaryotic Linear Motifs to protein sequences. Both TSV/GFF3 output or FASTA is possible. 
