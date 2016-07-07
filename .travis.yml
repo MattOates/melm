@@ -11,6 +11,9 @@ addons:
   apt:
     packages:
       - libdb-dev
+      - graphviz
+      - libgd2-xpm-dev
+      - libxml2-dev
 
 before_install:
   - "cpanm Devel::Cover::Report::Coveralls"
