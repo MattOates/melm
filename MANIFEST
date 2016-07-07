@@ -1,4 +1,5 @@
 .elm.dat
+.travis.yaml
 bin/melm
 CHANGES.md
 ignore.txt
