@@ -1,7 +1,8 @@
 .elm.dat
-.travis.yaml
+.travis.yml
 bin/melm
 CHANGES.md
+cpanfile
 ignore.txt
 lib/ELM.pm
 lib/ELM/AminoAcids.pm
