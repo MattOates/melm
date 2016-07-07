@@ -3,7 +3,18 @@ perl:
   - "5.24"
   - "5.22"
   - "5.20"
+
+sudo: false
+env: PERL_CPANM_OPT="--notest --force --skip-satisfied"
+
+addons:
+  apt:
+    packages:
+      - libdb-dev
+
 before_install:
-  cpanm -n Devel::Cover::Report::Coveralls && apt-get install libdb4.8
+  - "cpanm Devel::Cover::Report::Coveralls"
+  - "cpanm DBD::SQLite"
+
 script:
-  perl Build.PL && ./Build build && cover -test -report coveralls
+  - "perl Build.PL && ./Build build && cover -test -report coveralls"
