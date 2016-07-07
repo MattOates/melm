@@ -4,6 +4,6 @@ perl:
   - "5.22"
   - "5.20"
 before_install:
-  cpanm -n Devel::Cover::Report::Coveralls
+  cpanm -n Devel::Cover::Report::Coveralls && apt-get install libdb4.8
 script:
   perl Build.PL && ./Build build && cover -test -report coveralls
