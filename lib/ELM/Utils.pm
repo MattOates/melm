@@ -49,6 +49,7 @@ sub get_www($url) {
     }
     #Decided to localise this and just handle checking for deps properly
     my $ua = LWP::UserAgent->new;
+    $ua->timeout(600); # Wait at least 10 minutes, ELM can be very slow to respond
 
     my $response = $ua->get($url);
     if ($response->is_success) {

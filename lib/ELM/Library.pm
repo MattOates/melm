@@ -170,7 +170,7 @@ sub _get_instance_seqs($self) {
 sub _update_elm_instances($self) {
     my $instances_version;
     my %instance_logic = ('false positive' => 'FP','true negative' => 'TN','true positive', => 'TP', 'unknown' => 'U');
-    my $instances_tsv = get_www('http://elm.eu.org/instances.tsv?q=*&taxon=&instance_logic=');
+    my $instances_tsv = get_www('http://elm.eu.org/instances.tsv?q=*');
     my %uniprot_sequences = $self->_get_instance_seqs();
     #Each record looks like:
     #Accession, ELMType, ELMIdentifier, ProteinName, Primary_Acc, Accessions, Start, End, References, Methods, InstanceLogic, PDB, Organism
