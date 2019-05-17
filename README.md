@@ -1,7 +1,7 @@
 mELM [![GitHub version](https://badge.fury.io/gh/MattOates%2Fmelm.svg)](https://badge.fury.io/gh/MattOates%2Fmelm)[![Build Status](https://travis-ci.org/MattOates/melm.svg?branch=master)](https://travis-ci.org/MattOates/melm)[![Coverage Status](https://coveralls.io/repos/github/MattOates/melm/badge.svg?branch=master)](https://coveralls.io/github/MattOates/melm?branch=master)
 ==================
 
-[⬇️Download latest release v1.4.2](https://github.com/MattOates/melm/releases/download/v1.4.2/melm)
+[⬇️ Download latest release v1.4.2](https://github.com/MattOates/melm/releases/download/v1.4.2/melm)
 
 mELM is a tool for masking or assigning Eukaryotic Linear Motifs to protein sequences. Both TSV/GFF3 output or FASTA is possible. 
 Essentially the tool is a CLI to the ELM.eu.org online resource with additional tools for dealing with short motif assignment within disordered regions.
