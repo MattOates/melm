@@ -1,4 +1,4 @@
-package ELM v1.4.1;
+package ELM v1.4.2;
 =encoding UTF-8
 =head1 NAME
 
@@ -6,7 +6,7 @@ ELM - Class to do analysis with the ELM regex library
 
 =head1 VERSION
 
-Version v1.4.1
+Version v1.4.2
 
 =cut
 
@@ -219,7 +219,7 @@ If you have used mELM with ANCHOR predictions please cite the following:
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2016 Matt Oates.
+Copyright 2019 Matt Oates.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as

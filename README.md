@@ -101,7 +101,7 @@ License
 =======
 
            melm - Mask and assign ELM motifs in protein sequence libraries
-           (C) 2014-2016  Dr Matt E. Oates
+           (C) 2014-2019  Dr Matt E. Oates
 
            This program is free software: you can redistribute it and/or modify
            it under the terms of the GNU Affero General Public License as

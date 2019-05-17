@@ -68,6 +68,10 @@ If you have used mELM with ANCHOR predictions please cite the following:
 
 =head1 EXAMPLES
 
+First time running the script, get the ELM library locally installed to your home
+
+    melm --update
+
 Soft mask regions of a protein that do not contain any plausible ELM motifs
 
     melm human_proteins.fa > human_proteins_motifs.fa
@@ -80,9 +84,13 @@ Mask all PTM sites with 'X' in a set of seqences
 
     melm --hard-mask --mask-motifs --type=MOD human_proteins.fa > human_no_ptms.fa
 
-Get a GFF3 file for a whole genomes worth of protein annotations
+Get a GFF3 file for a whole genome's worth of protein annotations
 
     melm --assign --GFF3 human_proteins.fa > human_motifs.gff3
+
+Get another GFF3 file but this time be strict on assignment to those active in native disordered state
+
+    melm --assign --GFF3 --logic-filter --disorder-filter human_proteins.fa > disordered_hiqual_human_motifs.gff3
 
 Get the latest ELM classes library for use in another script or by yourself
 
@@ -99,7 +107,7 @@ B<Matt Oates> - I<mattoates@gmail.com>
 =head1 LICENSE
 
     melm - Mask and assign ELM motifs in protein sequence libraries
-    (C) 2014-2016  Dr Matt E. Oates
+    (C) 2014-2019  Dr Matt E. Oates
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as
@@ -115,6 +123,10 @@ B<Matt Oates> - I<mattoates@gmail.com>
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 =head1 EDIT HISTORY
+
+2019-05-17
+   * Updated timeout so that downloads from ELM.eu.org are more likely to succeed.
+   * Cut a new maintenance release 1.4.2
 
 2016-07-05 - Matt Oates
     * Majority of refactor complete
@@ -147,6 +159,8 @@ B<Matt Oates> - I<mattoates@gmail.com>
 =head1 TODO
 
     * Create an HTML output report with everything in
+    * Get the interaction partner data and report on it
+    * Do some domain assignment and match up the PDB interaction partners
 
 =cut
 
@@ -167,7 +181,7 @@ use ELM;
 use ELM::Utils 'get_www';
 
 #Current version of the script
-our $VERSION = "v1.4.1";
+our $VERSION = "v1.4.2";
 
 #User options
 my $help;
@@ -220,7 +234,7 @@ my @fasta_files = @ARGV;
 #Print out some help if it was asked for or if no arguments were given.
 pod2usage(-exitstatus => 0, -verbose => 2) if $help;
 
-pod2usage(-exitstatus => 0, -verbose => 1, -msg => "mELM version $VERSION by Matt Oates (C) 2014-2016. Please provide some sequence files to mask or assign ELM motifs to.") 
+pod2usage(-exitstatus => 0, -verbose => 1, -msg => "mELM version $VERSION by Matt Oates (C) 2014-2019. Please provide some sequence files to mask or assign ELM motifs to.") 
     unless $update or $upgrade or $list_classes or $list_instances or scalar @fasta_files >= 1;
 
 my $elm = ELM->new(

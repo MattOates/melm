@@ -1,4 +1,4 @@
-package ELM::Library v1.4.1;
+package ELM::Library v1.4.2;
 =encoding UTF-8
 =head1 NAME
 
@@ -6,7 +6,7 @@ ELM::Library - Class to hold the ELM regex library
 
 =head1 VERSION
 
-Version v1.4.1
+Version v1.4.2
 
 =cut
 
@@ -170,7 +170,7 @@ sub _get_instance_seqs($self) {
 sub _update_elm_instances($self) {
     my $instances_version;
     my %instance_logic = ('false positive' => 'FP','true negative' => 'TN','true positive', => 'TP', 'unknown' => 'U');
-    my $instances_tsv = get_www('http://elm.eu.org/instances.tsv?q=*&taxon=&instance_logic=');
+    my $instances_tsv = get_www('http://elm.eu.org/instances.tsv?q=*');
     my %uniprot_sequences = $self->_get_instance_seqs();
     #Each record looks like:
     #Accession, ELMType, ELMIdentifier, ProteinName, Primary_Acc, Accessions, Start, End, References, Methods, InstanceLogic, PDB, Organism
@@ -234,7 +234,7 @@ If you have used mELM with ANCHOR predictions please cite the following:
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2016 Matt Oates.
+Copyright 2019 Matt Oates.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as

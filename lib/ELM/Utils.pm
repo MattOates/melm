@@ -1,4 +1,4 @@
-package ELM::Utils v1.4.1;
+package ELM::Utils v1.4.2;
 require Exporter;
 =encoding UTF-8
 =head1 NAME
@@ -7,7 +7,7 @@ ELM::Utils - Common helper functions
 
 =head1 VERSION
 
-Version v1.4.1
+Version v1.4.2
 
 =cut
 
@@ -49,6 +49,7 @@ sub get_www($url) {
     }
     #Decided to localise this and just handle checking for deps properly
     my $ua = LWP::UserAgent->new;
+    $ua->timeout(600); # Wait at least 10 minutes, ELM can be very slow to respond
 
     my $response = $ua->get($url);
     if ($response->is_success) {
@@ -105,7 +106,7 @@ If you have used mELM with ANCHOR predictions please cite the following:
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2016 Matt Oates.
+Copyright 2019 Matt Oates.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as
