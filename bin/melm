@@ -1,4 +1,5 @@
 #!/usr/bin/env perl
+use utf8;
 =head1 NAME
 
 I<melm> - mELM masking of assigned ELM motifs
@@ -126,7 +127,7 @@ B<Matt Oates> - I<mattoates@gmail.com>
 
 2019-05-17
    * Updated timeout so that downloads from ELM.eu.org are more likely to succeed.
-   * Cut a new maintenance release 1.4.2
+   * Cut a new maintenance release 1.4.3
 
 2016-07-05 - Matt Oates
     * Majority of refactor complete
@@ -181,7 +182,7 @@ use ELM;
 use ELM::Utils 'get_www';
 
 #Current version of the script
-our $VERSION = "v1.4.2";
+our $VERSION = "v1.4.3";
 
 #User options
 my $help;

@@ -1,4 +1,4 @@
-package ELM::Calc v1.4.2;
+package ELM::Calc v1.4.3;
 require Exporter;
 =encoding UTF-8
 =head1 NAME
@@ -7,7 +7,7 @@ ELM::Calc - Functions for calculating sequence assignment specific tasks
 
 =head1 VERSION
 
-Version v1.4.2
+Version v1.4.3
 
 =cut
 

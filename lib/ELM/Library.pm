@@ -1,4 +1,4 @@
-package ELM::Library v1.4.2;
+package ELM::Library v1.4.3;
 =encoding UTF-8
 =head1 NAME
 
@@ -6,7 +6,7 @@ ELM::Library - Class to hold the ELM regex library
 
 =head1 VERSION
 
-Version v1.4.2
+Version v1.4.3
 
 =cut
 
