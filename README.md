@@ -32,7 +32,7 @@ If you have used mELM with ANCHOR predictions please cite the following:
 Usage
 =====
 
-        melm [h,v,u,U,c,i,a,G,E,X,m,n,C,P,l,t,M,D,d] <SEQ FILES...>
+        melm [h,v,u,U,c,i,a,G,E,X,m,n,C,P,l,t,M,D,d,g] <SEQ FILES...>
            -h, --help
                this message
            -v, --verbose
@@ -71,6 +71,8 @@ Usage
                if ANCHOR is installed use that to filter ELM output based on ANCHOR's IUPred disorder prediction, only include ELMs that fall within disordered regions
            -d <>, --anchor-datapath=<>
                provide the location of the anchor data path, mELM will otherwise assume it's in the same directory as your anchor binary
+           -g <>, --go-filter=<>
+               turn on GO filtering, only show results for ELM classes that have been associated with the GO ID specified
 
 Example Use Cases
 =================
@@ -90,6 +92,11 @@ Mask all PTM sites with 'X' in a set of seqences
 Get a GFF3 file for a whole genomes worth of protein annotations
 
            melm --assign --GFF3 human_proteins.fa > human_motifs.gff3
+
+Get another GFF3 file but this time be strict on assignment to those active in native disordered state from the nucleus
+using GO filtering for GO ID 0005634 "nucleus"
+
+           melm --assign --GFF3 --logic-filter --disorder-filter --go-filter=0005634 human_proteins.fa > disordered_hiqual_human_nucleus_motifs.gff3
 
 Get the latest ELM classes library for use in another script or by yourself
 
