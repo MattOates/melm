@@ -138,7 +138,7 @@ If you have used mELM with ANCHOR predictions please cite the following:
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2019 Matt Oates.
+Copyright 2022 Matt Oates.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as
