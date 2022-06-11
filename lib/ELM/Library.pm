@@ -186,9 +186,10 @@ sub _update_elm_instances($self) {
         (undef, $instances_version) = split /: /, $record if ($record =~ /^#ELM_Instance_Download_Version/);
         next if $record =~ /^(#|"Accession)/; #Ignore the header
         $record =~ s/"//g;
+        $record =~ s/\r//g;
         my ($elm_id, $type, $elm_name, $protein_name, $up_id, $alt_up_id, $start, $end, $references, $methods, $logic, $pdb, $organism) = split /\t/, $record;
         my $seq = substr( $uniprot_sequences{$up_id}, $start-1, 1+$end-$start );
-        push @{$self->elms->{$elm_name}{instances}}, {accession => $elm_id, id => $up_id, start => $start, end => $end, logic => $instance_logic{$logic}, seq => $seq};
+        push @{$self->elms->{$elm_name}{instances}}, {accession => $elm_id, id => $up_id, start => $start, end => $end, logic => $instance_logic{$logic}, seq => $seq, organism => $organism};
     }
     say STDERR "Instances data updated to version $instances_version.";
     $self->instances_version($instances_version);
@@ -198,7 +199,6 @@ sub _update_elm_instances($self) {
 sub _update_go_terms($self) {
     my $go_terms_version;
     my $go_term_tsv = get_www('http://elm.eu.org/goterms.tsv');
-    $self->go_terms({}) unless $self->go_terms;
 
     foreach my $record (split /\n/, $go_term_tsv) {
         (undef, $go_terms_version) = split /: /, $record if ($record =~ /^#ELM_GOTERMs_Download_Version/);

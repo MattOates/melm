@@ -30,7 +30,8 @@ use Class::Tiny qw(
     morf_filter
     disorder_filter
     logic_filter
-    go_filter), {
+    go_filter
+    organism_filter), {
     num_elms_threshold => sub { 1 },
 	library => sub { ELM::Library->new() },
 	anchor => sub { ELM::Anchor->new() },
@@ -120,6 +121,9 @@ sub assign($self, $elm_name, $regex, $string, $morf_regions, $dis_regions) {
         if ($self->go_filter and $self->library->go_terms_version) {
             next unless $self->_go_filter_ok($elm_name);
         }
+        if ($self->organism_filter) {
+            next unless $self->_organism_filter_ok($elm_name);
+        }
         push @ret, [$elm_name, $start, $end, $seq, $prob, $entropy, $entrorate];
     }
     if (@ret < 1) {
@@ -178,7 +182,13 @@ sub _logic_filter_ok($self, $elm_name, $seq, %opt) {
 
 sub _go_filter_ok($self, $elm_name) {
      my %elms = %{ $self->library->elms };
-     return scalar grep {$self->go_filter eq $_->{go_id}} @{$elms{$elm_name}{go_terms}} > 0;
+     return 0 != scalar grep {$self->go_filter eq $_->{go_id}} @{$elms{$elm_name}{go_terms}};
+}
+
+sub _organism_filter_ok($self, $elm_name) {
+     # At least one true positive (TP) example from a substr match to the organism text must exit
+     my %elms = %{ $self->library->elms };
+     return 0 != scalar grep {$_->{logic} eq 'TP' and index(fc $_->{organism}, fc $self->organism_filter ) != -1} @{$elms{$elm_name}{instances}};
 }
 
 =head1 AUTHOR

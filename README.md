@@ -73,6 +73,8 @@ Usage
                provide the location of the anchor data path, mELM will otherwise assume it's in the same directory as your anchor binary
            -g <>, --go-filter=<>
                turn on GO filtering, only show results for ELM classes that have been associated with the GO ID specified
+           -o <>, --organism-filter=<>
+               turn on organism filtering, only show results for ELM instances that have been observed in a given organism
 
 Example Use Cases
 =================
@@ -96,7 +98,7 @@ Get a GFF3 file for a whole genomes worth of protein annotations
 Get another GFF3 file but this time be strict on assignment to those active in native disordered state from the nucleus
 using GO filtering for GO ID 0005634 "nucleus"
 
-           melm --assign --GFF3 --logic-filter --disorder-filter --go-filter=0005634 human_proteins.fa > disordered_hiqual_human_nucleus_motifs.gff3
+           melm --assign --GFF3 --logic-filter --disorder-filter --go-filter=0005634 --organism-filter=sapiens human_proteins.fa > disordered_hiqual_human_nucleus_motifs.gff3
 
 Get the latest ELM classes library for use in another script or by yourself
 

@@ -47,6 +47,8 @@ I<melm> - mELM masking of assigned ELM motifs
         provide the location of the anchor data path, mELM will otherwise assume it's in the same directory as your anchor binary
     -g <>, --go-filter=<>
         turn on GO filtering, only show results for ELM classes that have been associated with the GO ID specified
+    -o <>, --organism-filter=<>
+        turn on organism filtering, only show results for ELM instances that have been observed in a given organism
 
 =head1 DESCRIPTION
 
@@ -93,7 +95,7 @@ Get a GFF3 file for a whole genome's worth of protein annotations
 
 Get another GFF3 file but this time be strict on assignment to those active in native disordered state from the nucleus
 
-    melm --assign --GFF3 --logic-filter --disorder-filter --go-filter=0005634 human_proteins.fa > disordered_hiqual_human_nucleus_motifs.gff3
+    melm --assign --GFF3 --logic-filter --disorder-filter --go-filter=0005634 --organism-filter=sapiens human_proteins.fa > disordered_hiqual_human_nucleus_motifs.gff3
 
 Get the latest ELM classes library for use in another script or by yourself
 
@@ -212,6 +214,7 @@ my $type;
 my $gff;
 my $anchor_datapath;
 my $go_filter;
+my $organism_filter;
 
 #Flags used h,v,u,U,c,i,a,G,E,X,m,n,C,P,l,t,M,D,d,g
 GetOptions(
@@ -235,6 +238,7 @@ GetOptions(
     "disorder-filter|D!" => \$disorder_filter,
     "anchor-datapath|d=s" => \$anchor_datapath,
     "go-filter|g=s" => \$go_filter,
+    "organism-filter|g=s" => \$organism_filter,
 ) or die "Fatal Error: Problem parsing command-line ".$!;
 
 my @fasta_files = @ARGV;
@@ -254,6 +258,7 @@ my $elm = ELM->new(
             disorder_filter => $disorder_filter,
             logic_filter => $logic_filter,
             go_filter => $go_filter,
+            organism_filter => $organism_filter,
             num_elms_threshold => $num_elms,
             anchor => ELM::Anchor->new(anchor_datapath => $anchor_datapath)
 );
