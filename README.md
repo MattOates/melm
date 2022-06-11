@@ -1,7 +1,7 @@
-mELM [![GitHub version](https://badge.fury.io/gh/MattOates%2Fmelm.svg)](https://badge.fury.io/gh/MattOates%2Fmelm)[![Build Status](https://travis-ci.org/MattOates/melm.svg?branch=master)](https://travis-ci.org/MattOates/melm)[![Coverage Status](https://coveralls.io/repos/github/MattOates/melm/badge.svg?branch=master)](https://coveralls.io/github/MattOates/melm?branch=master)
+mELM [![GitHub version](https://badge.fury.io/gh/MattOates%2Fmelm.svg)](https://badge.fury.io/gh/MattOates%2Fmelm)[![Build Status](https://travis-ci.com/MattOates/melm.svg?branch=master)](https://travis-ci.com/MattOates/melm)[![Coverage Status](https://coveralls.io/repos/github/MattOates/melm/badge.svg?branch=master)](https://coveralls.io/github/MattOates/melm?branch=master)
 ==================
 
-[⬇️ Download latest release v1.4.2](https://github.com/MattOates/melm/releases/download/v1.4.2/melm)
+[⬇️ Download latest release v1.4.3](https://github.com/MattOates/melm/releases/download/v1.4.3/melm)
 
 mELM is a tool for masking or assigning Eukaryotic Linear Motifs to protein sequences. Both TSV/GFF3 output or FASTA is possible. 
 Essentially the tool is a CLI to the ELM.eu.org online resource with additional tools for dealing with short motif assignment within disordered regions.
@@ -32,7 +32,7 @@ If you have used mELM with ANCHOR predictions please cite the following:
 Usage
 =====
 
-        melm [h,v,u,U,c,i,a,G,E,X,m,n,C,P,l,t,M,D,d] <SEQ FILES...>
+        melm [h,v,u,U,c,i,a,G,E,X,m,n,C,P,l,t,M,D,d,g] <SEQ FILES...>
            -h, --help
                this message
            -v, --verbose
@@ -71,6 +71,10 @@ Usage
                if ANCHOR is installed use that to filter ELM output based on ANCHOR's IUPred disorder prediction, only include ELMs that fall within disordered regions
            -d <>, --anchor-datapath=<>
                provide the location of the anchor data path, mELM will otherwise assume it's in the same directory as your anchor binary
+           -g <>, --go-filter=<>
+               turn on GO filtering, only show results for ELM classes that have been associated with the GO ID specified
+           -o <>, --organism-filter=<>
+               turn on organism filtering, only show results for ELM instances that have been observed in a given organism
 
 Example Use Cases
 =================
@@ -91,6 +95,11 @@ Get a GFF3 file for a whole genomes worth of protein annotations
 
            melm --assign --GFF3 human_proteins.fa > human_motifs.gff3
 
+Get another GFF3 file but this time be strict on assignment to those active in native disordered state from the nucleus
+using GO filtering for GO ID 0005634 "nucleus"
+
+           melm --assign --GFF3 --logic-filter --disorder-filter --go-filter=0005634 --organism-filter=sapiens human_proteins.fa > disordered_hiqual_human_nucleus_motifs.gff3
+
 Get the latest ELM classes library for use in another script or by yourself
 
            melm --update --list-classes
@@ -103,7 +112,7 @@ License
 =======
 
            melm - Mask and assign ELM motifs in protein sequence libraries
-           (C) 2014-2019  Dr Matt E. Oates
+           (C) 2014-2022  Dr Matt E. Oates
 
            This program is free software: you can redistribute it and/or modify
            it under the terms of the GNU Affero General Public License as

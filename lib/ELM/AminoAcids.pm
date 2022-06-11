@@ -1,4 +1,4 @@
-package ELM::AminoAcids v1.4.2;
+package ELM::AminoAcids v1.4.3;
 require Exporter;
 =encoding UTF-8
 =head1 NAME
@@ -7,7 +7,7 @@ ELM::AminoAcids - Functions for dealing with amino acid specific calculations
 
 =head1 VERSION
 
-Version v1.4.2
+Version v1.4.3
 
 =cut
 
@@ -142,7 +142,7 @@ If you have used mELM with ANCHOR predictions please cite the following:
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2019 Matt Oates.
+Copyright 2022 Matt Oates.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as

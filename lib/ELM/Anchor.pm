@@ -1,4 +1,4 @@
-package ELM::Anchor v1.4.2;
+package ELM::Anchor v1.4.3;
 =encoding UTF-8
 =head1 NAME
 
@@ -6,7 +6,7 @@ ELM::Anchor - Class to wrap ANCHOR and get assignments
 
 =head1 VERSION
 
-Version v1.4.2
+Version v1.4.3
 
 =cut
 
@@ -44,11 +44,9 @@ To create an ELM::Anchor explicitly.
 Get/Set the ANCHOR datapath, default to install directory
 
 =cut
-sub anchor_datapath($self) {
+sub anchor_datapath($self, $path) {
     my $defaults = Class::Tiny->get_all_attribute_defaults_for( ref $self );
-    if (@_) {
-        my $path = shift;
-        $path = $defaults->{anchor_datapath}->() unless $path;
+    if ($path) {
         return $self->{anchor_datapath} = $path;
     }
     elsif ( exists $self->{anchor_datapath} ) {
@@ -194,7 +192,7 @@ If you have used mELM with ANCHOR predictions please cite the following:
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2019 Matt Oates.
+Copyright 2022 Matt Oates.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as

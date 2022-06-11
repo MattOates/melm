@@ -1,6 +1,6 @@
 ###2019-05-17
    * Updated timeout so that downloads from ELM.eu.org are more likely to succeed.
-   * Cut a new maintenance release 1.4.2
+   * Cut a new maintenance release 1.4.3
 
 ###2016-07-05
     * Majority of refactor complete

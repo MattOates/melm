@@ -1,4 +1,5 @@
 #!/usr/bin/env perl
+use utf8;
 =head1 NAME
 
 I<melm> - mELM masking of assigned ELM motifs
@@ -20,7 +21,7 @@ I<melm> - mELM masking of assigned ELM motifs
         get TSV output of all the ELM instances held in the melm cache
     -a, --assign
         do not mask sequences, instead output a TSV format of all the ELM assignments made per sequence
-    -G, -GFF3
+    -G, --GFF3
         produce GFF3 output when using --assign, useful if you wish to add this assignment to a genome browser or similar
     -E <>, --max-class-expect=<>
         filter out ELM classes based on their annotated expectation, bigger E means allow for more common motifs
@@ -44,6 +45,10 @@ I<melm> - mELM masking of assigned ELM motifs
         if ANCHOR is installed use that to filter ELM output based on ANCHOR's IUPred disorder prediction, only include ELMs that fall within disordered regions
     -d <>, --anchor-datapath=<>
         provide the location of the anchor data path, mELM will otherwise assume it's in the same directory as your anchor binary
+    -g <>, --go-filter=<>
+        turn on GO filtering, only show results for ELM classes that have been associated with the GO ID specified
+    -o <>, --organism-filter=<>
+        turn on organism filtering, only show results for ELM instances that have been observed in a given organism
 
 =head1 DESCRIPTION
 
@@ -88,9 +93,9 @@ Get a GFF3 file for a whole genome's worth of protein annotations
 
     melm --assign --GFF3 human_proteins.fa > human_motifs.gff3
 
-Get another GFF3 file but this time be strict on assignment to those active in native disordered state
+Get another GFF3 file but this time be strict on assignment to those active in native disordered state from the nucleus
 
-    melm --assign --GFF3 --logic-filter --disorder-filter human_proteins.fa > disordered_hiqual_human_motifs.gff3
+    melm --assign --GFF3 --logic-filter --disorder-filter --go-filter=0005634 --organism-filter=sapiens human_proteins.fa > disordered_hiqual_human_nucleus_motifs.gff3
 
 Get the latest ELM classes library for use in another script or by yourself
 
@@ -107,7 +112,7 @@ B<Matt Oates> - I<mattoates@gmail.com>
 =head1 LICENSE
 
     melm - Mask and assign ELM motifs in protein sequence libraries
-    (C) 2014-2019  Dr Matt E. Oates
+    (C) 2014-2022  Dr Matt E. Oates
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as
@@ -124,9 +129,12 @@ B<Matt Oates> - I<mattoates@gmail.com>
 
 =head1 EDIT HISTORY
 
+2022-06-10
+   * Added GO data support and bumped the version for release
+
 2019-05-17
    * Updated timeout so that downloads from ELM.eu.org are more likely to succeed.
-   * Cut a new maintenance release 1.4.2
+   * Cut a new maintenance release 1.4.3
 
 2016-07-05 - Matt Oates
     * Majority of refactor complete
@@ -181,7 +189,7 @@ use ELM;
 use ELM::Utils 'get_www';
 
 #Current version of the script
-our $VERSION = "v1.4.2";
+our $VERSION = "v1.4.3";
 
 #User options
 my $help;
@@ -205,8 +213,10 @@ my $disorder_filter;
 my $type;
 my $gff;
 my $anchor_datapath;
+my $go_filter;
+my $organism_filter;
 
-#Flags used h,v,u,U,c,i,a,G,E,X,m,n,C,P,l,t,M,D,d
+#Flags used h,v,u,U,c,i,a,G,E,X,m,n,C,P,l,t,M,D,d,g
 GetOptions(
     "help|h!" => \$help,
     "verbose|v!" => \$verbose,
@@ -227,6 +237,8 @@ GetOptions(
     "morf-filter|M!" => \$morf_filter,
     "disorder-filter|D!" => \$disorder_filter,
     "anchor-datapath|d=s" => \$anchor_datapath,
+    "go-filter|g=s" => \$go_filter,
+    "organism-filter|g=s" => \$organism_filter,
 ) or die "Fatal Error: Problem parsing command-line ".$!;
 
 my @fasta_files = @ARGV;
@@ -234,7 +246,7 @@ my @fasta_files = @ARGV;
 #Print out some help if it was asked for or if no arguments were given.
 pod2usage(-exitstatus => 0, -verbose => 2) if $help;
 
-pod2usage(-exitstatus => 0, -verbose => 1, -msg => "mELM version $VERSION by Matt Oates (C) 2014-2019. Please provide some sequence files to mask or assign ELM motifs to.") 
+pod2usage(-exitstatus => 0, -verbose => 1, -msg => "mELM version $VERSION by Matt Oates (C) 2014-2022. Please provide some sequence files to mask or assign ELM motifs to.")
     unless $update or $upgrade or $list_classes or $list_instances or scalar @fasta_files >= 1;
 
 my $elm = ELM->new(
@@ -245,6 +257,8 @@ my $elm = ELM->new(
             morf_filter => $morf_filter,
             disorder_filter => $disorder_filter,
             logic_filter => $logic_filter,
+            go_filter => $go_filter,
+            organism_filter => $organism_filter,
             num_elms_threshold => $num_elms,
             anchor => ELM::Anchor->new(anchor_datapath => $anchor_datapath)
 );
@@ -272,6 +286,15 @@ if ($upgrade) {
 
     say STDERR "Done!";
     exit;
+}
+
+if ($elm->go_filter and not $elm->library->go_terms_version) {
+    say STDERR "You're trying to use a GO filter with no cached GO data, trying to update to fetch GO data";
+    $elm->library->update();
+    if (not $elm->library->go_terms_version) {
+        say STDERR "Something appears to have failed with fetching GO data. Cannot proceed.";
+        exit;
+    }
 }
 
 #Update the ELM classes file and populate elms

@@ -1,4 +1,4 @@
-package ELM::Library v1.4.2;
+package ELM::Library v1.4.3;
 =encoding UTF-8
 =head1 NAME
 
@@ -6,7 +6,7 @@ ELM::Library - Class to hold the ELM regex library
 
 =head1 VERSION
 
-Version v1.4.2
+Version v1.4.3
 
 =cut
 
@@ -26,8 +26,9 @@ $Data::Dumper::Terse=1;
 
 use Class::Tiny qw(
     elms
+    go_terms_version
     classes_version
-    instances_version),{ 
+    instances_version),{
     elm_lib_path => sub { $ENV{HOME} . '/.elm.dat' }
 };
 
@@ -73,11 +74,16 @@ sub load_elm_classes($self) {
         #Load the cached ELM classes/instances data
         local $/; #slurp
         open my $elm_fh, '<', $self->elm_lib_path;
-        my ($classes_version, $instances_version, $classes) =  @{ eval <$elm_fh> };
+        my ($classes_version, $instances_version, $classes, $go_terms_version) =  @{ eval <$elm_fh> };
         close $elm_fh;
         $self->elms($classes);
         $self->classes_version($classes_version);
         $self->instances_version($instances_version);
+        if ($go_terms_version) {
+            $self->go_terms_version($go_terms_version);
+        } else {
+            say STDERR "Local cache did not contain GO terms, you might want to update to v1.4.3"
+        }
     } else {
         say STDERR "Could not find an ELM library at " . $self->elm_lib_path . " so auto-fetching a fresh one for the first time";
         $self->update;
@@ -93,8 +99,9 @@ sub update($self) {
     say STDERR "Updating ELM classes file " . $self->elm_lib_path;
     $self->_update_elm_classes();
     $self->_update_elm_instances();
+    $self->_update_go_terms();
     open my $elm_fh,'>', $self->elm_lib_path;
-    say $elm_fh Dumper([$self->classes_version, $self->instances_version, $self->elms]);
+    say $elm_fh Dumper([$self->classes_version, $self->instances_version, $self->elms, $self->go_terms_version]);
     close $elm_fh;
 }
 
@@ -179,12 +186,31 @@ sub _update_elm_instances($self) {
         (undef, $instances_version) = split /: /, $record if ($record =~ /^#ELM_Instance_Download_Version/);
         next if $record =~ /^(#|"Accession)/; #Ignore the header
         $record =~ s/"//g;
+        $record =~ s/\r//g;
         my ($elm_id, $type, $elm_name, $protein_name, $up_id, $alt_up_id, $start, $end, $references, $methods, $logic, $pdb, $organism) = split /\t/, $record;
         my $seq = substr( $uniprot_sequences{$up_id}, $start-1, 1+$end-$start );
-        push @{$self->elms->{$elm_name}{instances}}, {accession => $elm_id, id => $up_id, start => $start, end => $end, logic => $instance_logic{$logic}, seq => $seq};
+        push @{$self->elms->{$elm_name}{instances}}, {accession => $elm_id, id => $up_id, start => $start, end => $end, logic => $instance_logic{$logic}, seq => $seq, organism => $organism};
     }
     say STDERR "Instances data updated to version $instances_version.";
     $self->instances_version($instances_version);
+}
+
+#Refresh the cached GO term data
+sub _update_go_terms($self) {
+    my $go_terms_version;
+    my $go_term_tsv = get_www('http://elm.eu.org/goterms.tsv');
+
+    foreach my $record (split /\n/, $go_term_tsv) {
+        (undef, $go_terms_version) = split /: /, $record if ($record =~ /^#ELM_GOTERMs_Download_Version/);
+        next if $record =~ /^(#|"ELM)/; #Ignore the header
+        $record =~ s/"//g;
+        $record =~ s/\r//g;
+        my ($elm_name, $go_id, $go_term) = split /\t/, $record;
+        $go_id =~ s/^GO://;
+        push @{$self->elms->{$elm_name}{go_terms}}, {go_id => $go_id, go_term => $go_term};
+    }
+    say STDERR "GO data updated to version $go_terms_version.";
+    $self->go_terms_version($go_terms_version);
 }
 
 =head1 AUTHOR
@@ -234,7 +260,7 @@ If you have used mELM with ANCHOR predictions please cite the following:
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2019 Matt Oates.
+Copyright 2022 Matt Oates.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as
